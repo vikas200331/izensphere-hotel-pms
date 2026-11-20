@@ -14,12 +14,12 @@ const inputCls =
   "focus:outline-2 focus:outline-offset-1 focus:outline-[#1E7B4F]"
 
 const DEMO_ACCOUNTS = [
-  { label: "System Admin", usr: "admin@izensphere_stay_and_dine.local", pwd: "KamraAdmin1!" },
-  { label: "Hotel Admin (GM)", usr: "gm@izensphere_stay_and_dine.local", pwd: "KamraGM1!" },
-  { label: "Front Desk", usr: "frontdesk@izensphere_stay_and_dine.local", pwd: "KamraDesk1!" },
-  { label: "Revenue", usr: "revenue@izensphere_stay_and_dine.local", pwd: "KamraRev1!" },
-  { label: "Finance", usr: "finance@izensphere_stay_and_dine.local", pwd: "KamraFin1!" },
-  { label: "Housekeeping", usr: "hk@izensphere_stay_and_dine.local", pwd: "KamraHK1!" },
+  { label: "System Admin", usr: "admin@stayanddine.local", pwd: "Admin@123" },
+  { label: "Hotel Admin (GM)", usr: "gm@stayanddine.local", pwd: "Gm@123" },
+  { label: "Front Desk", usr: "frontdesk@stayanddine.local", pwd: "Frontdesk@123" },
+  { label: "Revenue", usr: "revenue@stayanddine.local", pwd: "Revenue@123" },
+  { label: "Finance", usr: "finance@stayanddine.local", pwd: "Finance@123" },
+  { label: "Housekeeping", usr: "hk@stayanddine.local", pwd: "Hk@123" },
 ]
 
 export default function Login(props: { onSuccess: () => void }) {

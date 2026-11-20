@@ -30,11 +30,14 @@ def ensure_hotel_admin():
 	print(f"Hotel Admin: full perms on {len(ALL_DOCTYPES)} doctypes")
 
 	# demo admin wears both hats
-	user = frappe.get_doc("User", "admin@izensphere_stay_and_dine.local")
-	if "Hotel Admin" not in {r.role for r in user.roles}:
-		user.append("roles", {"role": "Hotel Admin"})
+	admin_email = "admin@stayanddine.local"
+	if frappe.db.exists("User", admin_email):
+		user = frappe.get_doc("User", admin_email)
+		for r in ("Hotel Admin", "Front Desk"):
+			if r not in {role.role for role in user.roles}:
+				user.append("roles", {"role": r})
 		user.save(ignore_permissions=True)
-		print("admin@izensphere_stay_and_dine.local: +Hotel Admin")
+		print(f"{admin_email}: +Hotel Admin +Front Desk")
 
 
 def ensure_agent_user():
