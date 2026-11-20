@@ -65,23 +65,23 @@ ROLE_GRANTS = {
 }
 
 USERS = [
-	{"email": "admin@izensphere_stay_and_dine.local", "first_name": "Demo", "last_name": "Admin",
-	 "password": "KamraAdmin1!", "roles": ["System Manager"]},
+	{"email": "admin@stayanddine.local", "first_name": "Demo", "last_name": "Admin",
+	 "password": "Admin@123", "roles": ["System Manager"]},
 	# The GM / Hotel Admin — business super-user (ops + finance + revenue +
 	# high-level settings) but NOT an IT admin: no users, developers or Desk.
-	{"email": "gm@izensphere_stay_and_dine.local", "first_name": "Gita", "last_name": "Menon",
-	 "password": "KamraGM1!", "roles": ["Hotel Admin"]},
-	{"email": "frontdesk@izensphere_stay_and_dine.local", "first_name": "Ravi",
-	 "last_name": "FrontDesk", "password": "KamraDesk1!",
+	{"email": "gm@stayanddine.local", "first_name": "Gita", "last_name": "Menon",
+	 "password": "Gm@123", "roles": ["Hotel Admin"]},
+	{"email": "frontdesk@stayanddine.local", "first_name": "Ravi",
+	 "last_name": "FrontDesk", "password": "Frontdesk@123",
 	 "roles": ["Front Desk"]},
-	{"email": "revenue@izensphere_stay_and_dine.local", "first_name": "Anita",
-	 "last_name": "Revenue", "password": "KamraRev1!",
+	{"email": "revenue@stayanddine.local", "first_name": "Anita",
+	 "last_name": "Revenue", "password": "Revenue@123",
 	 "roles": ["Revenue Manager", "Front Desk"]},
-	{"email": "finance@izensphere_stay_and_dine.local", "first_name": "Suresh",
-	 "last_name": "Finance", "password": "KamraFin1!",
+	{"email": "finance@stayanddine.local", "first_name": "Suresh",
+	 "last_name": "Finance", "password": "Finance@123",
 	 "roles": ["Finance"]},
-	{"email": "hk@izensphere_stay_and_dine.local", "first_name": "Lakshmi",
-	 "last_name": "Housekeeping", "password": "KamraHK1!",
+	{"email": "hk@stayanddine.local", "first_name": "Lakshmi",
+	 "last_name": "Housekeeping", "password": "Housekeeping@123",
 	 "roles": ["Housekeeping"]},
 ]
 
