@@ -1,6 +1,6 @@
 import frappe
 
-AGENT_EMAIL = "agent@izensphere_stay_and_dine.local"
+AGENT_EMAIL = "agent@stayanddine.local"
 AGENT_ROLE = "Kamra Agent"
 
 
@@ -101,12 +101,12 @@ def ensure_agent_identity():
 		user = frappe.get_doc({
 			"doctype": "User",
 			"email": AGENT_EMAIL,
-			"first_name": "Kamra",
+			"first_name": "Izensphere",
 			"last_name": "Agent",
 			"enabled": 1,
 			"user_type": "System User",
 			"send_welcome_email": 0,
-			"roles": [{"role": AGENT_ROLE}],
+			"roles": [{"role": AGENT_ROLE}, {"role": "Front Desk"}],
 		})
 		user.flags.no_welcome_mail = True
 		user.insert(ignore_permissions=True)
@@ -116,9 +116,11 @@ def ensure_agent_identity():
 		if not user.enabled:
 			user.enabled = 1
 			dirty = True
-		if AGENT_ROLE not in {r.role for r in user.roles}:
-			user.append("roles", {"role": AGENT_ROLE})
-			dirty = True
+		current_roles = {r.role for r in user.roles}
+		for r in (AGENT_ROLE, "Front Desk"):
+			if r not in current_roles:
+				user.append("roles", {"role": r})
+				dirty = True
 		if dirty:
 			user.save(ignore_permissions=True)
 

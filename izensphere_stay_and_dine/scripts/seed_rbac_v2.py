@@ -16,7 +16,7 @@ import frappe
 
 from izensphere_stay_and_dine.scripts.fix_perms_fields import ALL_DOCTYPES, _grant
 
-AGENT_EMAIL = "agent@izensphere_stay_and_dine.local"
+AGENT_EMAIL = "agent@stayanddine.local"
 
 
 def ensure_hotel_admin():
