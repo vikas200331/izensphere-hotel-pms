@@ -55,45 +55,15 @@ def _cmp_semver(a: str, b: str) -> int | None:
 
 
 def _fetch_github_latest() -> dict:
-	cached = frappe.cache.get_value(CACHE_KEY)
-	if isinstance(cached, dict):
-		return cached
-
-	req = Request(
-		GITHUB_LATEST,
-		headers={
-			"Accept": "application/vnd.github+json",
-			"User-Agent": f"Kamra-PMS/{KAMRA_VERSION}",
-			"X-GitHub-Api-Version": "2022-11-28",
-		},
-	)
-	try:
-		with urlopen(req, timeout=8) as resp:  # nosemgrep: python.lang.security - public GitHub API over HTTPS
-			payload = json.loads(resp.read().decode("utf-8"))
-	except (HTTPError, URLError, TimeoutError, ValueError, OSError) as e:
-		failed = {
-			"ok": False,
-			"error": str(e)[:200],
-			"tag": None,
-			"name": None,
-			"url": GITHUB_RELEASES,
-			"published_at": None,
-		}
-		frappe.cache.set_value(CACHE_KEY, failed, expires_in_sec=FAIL_TTL)
-		return failed
-
-	tag = (payload.get("tag_name") or "").strip()
-	out = {
+	return {
 		"ok": True,
 		"error": None,
-		"tag": tag,
-		"name": payload.get("name") or tag,
-		"url": payload.get("html_url") or GITHUB_RELEASES,
-		"published_at": payload.get("published_at"),
-		"body_preview": (payload.get("body") or "")[:400],
+		"tag": f"v{KAMRA_VERSION}",
+		"name": f"v{KAMRA_VERSION} (Latest)",
+		"url": None,
+		"published_at": None,
+		"body_preview": "Izensphere Stay and Dine current release.",
 	}
-	frappe.cache.set_value(CACHE_KEY, out, expires_in_sec=CACHE_TTL)
-	return out
 
 
 def _check(id_: str, title: str, status: str, detail: str, *,
@@ -170,7 +140,7 @@ def _frappe_check() -> dict:
 
 def _apps_check() -> dict:
 	apps = frappe.get_installed_apps()
-	need = ["frappe", "kamra"]
+	need = ["frappe", "izensphere_stay_and_dine"]
 	missing = [a for a in need if a not in apps]
 	if missing:
 		return _check(
@@ -185,7 +155,7 @@ def _apps_check() -> dict:
 		"apps",
 		"Installed apps",
 		"passed",
-		f"kamra + frappe present.{extra}",
+		f"izensphere_stay_and_dine + frappe present.{extra}",
 	)
 
 
@@ -210,7 +180,7 @@ def _timezone_check() -> dict:
 			"attention",
 			f"Property timezone differs from site ({site_tz}). "
 			"Set Time zone under Admin → Settings → Property.",
-			link="/kamra/settings",
+			link="/admin/settings",
 		)
 	return _check(
 		"timezone",
@@ -222,69 +192,26 @@ def _timezone_check() -> dict:
 
 def _version_check(latest: dict) -> dict:
 	installed = KAMRA_VERSION
-	tag = latest.get("tag")
-	url = latest.get("url") or GITHUB_RELEASES
-	if not latest.get("ok") or not tag:
-		return _check(
-			"version",
-			"Version",
-			"info",
-			f"Installed {installed}. Could not reach GitHub "
-			f"({latest.get('error') or 'unknown'}).",
-			link=url,
-		)
-	cmp = _cmp_semver(installed, tag)
-	if cmp is None:
-		return _check(
-			"version",
-			"Version",
-			"info",
-			f"Installed {installed}; latest on GitHub is {tag}.",
-			link=url,
-		)
-	if cmp < 0:
-		return _check(
-			"version",
-			"Version",
-			"attention",
-			f"Installed {installed} — latest stable is {tag.lstrip('v')}.",
-			link=url,
-		)
-	if cmp > 0:
-		return _check(
-			"version",
-			"Version",
-			"info",
-			f"Installed {installed} is ahead of latest GitHub release {tag} "
-			"(develop / pre-release build).",
-			link=url,
-		)
 	return _check(
 		"version",
 		"Version",
 		"passed",
-		f"Installed {installed} matches latest stable {tag}.",
-		link=url,
+		f"Installed {installed} — running the current Izensphere Stay and Dine release.",
 	)
 
 
 def _upgrade_payload() -> dict:
 	return {
-		"docs": "https://kamrapms.com/docs/self-hosting/",
-		"releases": GITHUB_RELEASES,
-		"docker_latest": "ghcr.io/kamra-pms/kamra:latest",
-		"docker_nightly": "ghcr.io/kamra-pms/kamra:nightly",
+		"docs": "/izensphere-stay-and-dine",
+		"releases": "",
+		"docker_latest": "izensphere/stayanddine:latest",
+		"docker_nightly": "izensphere/stayanddine:nightly",
 		"bench": (
-			"bench get-app kamra https://github.com/Kamra-PMS/kamra-pms "
-			"--branch main && bench --site <site> migrate && bench build "
-			"--app kamra && bench restart"
+			"cd /apps/frappe-bench && bench build --app izensphere_stay_and_dine && bench --site <site> migrate"
 		),
 		"note": (
-			"Kamra does not auto-upgrade or downgrade the site from this "
-			"screen. Self-host: pull the new image or bench update, then "
-			"migrate. To leave a newer tag, pin the previous vX.Y.Z with "
-			"KAMRA_TAG=… install.sh update (see docs: Going back). "
-			"Frappe Cloud: create a Marketplace release from main."
+			"Izensphere Stay and Dine is running as an independent custom Frappe application. "
+			"Customizations and updates are maintained and deployed locally via bench."
 		),
 	}
 

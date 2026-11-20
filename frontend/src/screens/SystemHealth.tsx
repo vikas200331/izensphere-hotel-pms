@@ -160,7 +160,7 @@ export default function SystemHealth() {
                   {t("Installed")}
                 </p>
                 <p className="mt-0.5 font-mono text-sm font-semibold">
-                  kamra {data.installed.kamra}
+                  Izensphere Stay and Dine {data.installed.kamra}
                 </p>
                 <p className="text-xs text-zinc-500">
                   Frappe {data.installed.frappe ?? "-"}
@@ -168,22 +168,14 @@ export default function SystemHealth() {
               </div>
               <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                  {t("Latest on GitHub")}
+                  {t("Release Status")}
                 </p>
                 <p className="mt-0.5 font-mono text-sm font-semibold">
-                  {data.latest.tag ?? t("Unavailable")}
+                  {data.latest.name ?? data.latest.tag ?? t("Current")}
                 </p>
-                {data.latest.url && (
-                  <a
-                    href={data.latest.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
-                  >
-                    {t("Release notes")}
-                    <ExternalLink className="size-3" aria-hidden />
-                  </a>
-                )}
+                <p className="text-xs text-zinc-500">
+                  {t("Up to date")}
+                </p>
               </div>
               <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
@@ -235,22 +227,10 @@ export default function SystemHealth() {
 
           <Card>
             <CardHeader>
-              <CardTitle>{t("How to upgrade")}</CardTitle>
+              <CardTitle>{t("Maintenance & Updates")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-zinc-600">
               <p>{t(data.upgrade.note)}</p>
-              <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-                  {t("Docker (self-host)")}
-                </p>
-                <code className="mt-1 block break-all font-mono text-xs text-zinc-800">
-                  docker pull {data.upgrade.docker_latest}
-                </code>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {t("Then recreate the stack / run migrate. Nightly channel")}:{" "}
-                  <code className="font-mono">{data.upgrade.docker_nightly}</code>
-                </p>
-              </div>
               <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
                   {t("Bench")}
@@ -258,35 +238,6 @@ export default function SystemHealth() {
                 <code className="mt-1 block whitespace-pre-wrap break-all font-mono text-xs text-zinc-800">
                   {data.upgrade.bench}
                 </code>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <a
-                  href={data.upgrade.releases}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
-                >
-                  {t("GitHub releases")}
-                  <ExternalLink className="size-3.5" aria-hidden />
-                </a>
-                <a
-                  href={data.upgrade.docs}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
-                >
-                  {t("Self-hosting docs")}
-                  <ExternalLink className="size-3.5" aria-hidden />
-                </a>
-                <a
-                  href="https://kamrapms.com/docs/quickstart#going-back-downgrade"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
-                >
-                  {t("Going back (downgrade)")}
-                  <ExternalLink className="size-3.5" aria-hidden />
-                </a>
               </div>
             </CardContent>
           </Card>
