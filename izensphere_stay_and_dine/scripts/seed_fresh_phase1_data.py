@@ -277,9 +277,33 @@ def seed():
 
     # 5. Housekeeping Tasks
     hk_tasks = [
-        {"room": "Izensphere Dine-103", "task_type": "Checkout Clean", "priority": "High", "status": "Pending", "notes": "Guest departs today at 11:00 AM"},
-        {"room": "Izensphere Dine-104", "task_type": "Stayover Clean", "priority": "Medium", "status": "In Progress", "notes": "Linen change & bathroom replenishment requested"},
-        {"room": "Izensphere Dine-105", "task_type": "Deep Clean", "priority": "High", "status": "In Progress", "notes": "Deep carpet shampoo & AC filter check"},
+        {
+            "room": "Izensphere Dine-103",
+            "task_type": "Checkout Clean",
+            "priority": "High",
+            "status": "In Progress",
+            "assignment_status": "Accepted",
+            "assigned_to_user": "admin@stayanddine.local",
+            "notes": "Guest departs today at 11:00 AM"
+        },
+        {
+            "room": "Izensphere Dine-104",
+            "task_type": "Stayover Clean",
+            "priority": "Medium",
+            "status": "Pending",
+            "assignment_status": "Assigned",
+            "assigned_to_user": "admin@stayanddine.local",
+            "notes": "Linen change & bathroom replenishment requested"
+        },
+        {
+            "room": "Izensphere Dine-105",
+            "task_type": "Deep Clean",
+            "priority": "High",
+            "status": "Pending",
+            "assignment_status": "Unassigned",
+            "assigned_to_user": None,
+            "notes": "Deep carpet shampoo & AC filter check"
+        },
     ]
     for ht in hk_tasks:
         frappe.get_doc({
@@ -290,7 +314,8 @@ def seed():
             "priority": ht["priority"],
             "status": ht["status"],
             "notes": ht["notes"],
-            "assignment_status": "Assigned",
+            "assignment_status": ht["assignment_status"],
+            "assigned_to_user": ht["assigned_to_user"],
             "due_by": now_datetime(),
         }).insert(ignore_permissions=True)
     print("Housekeeping tasks seeded.")
