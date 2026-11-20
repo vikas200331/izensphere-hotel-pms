@@ -489,7 +489,7 @@ def _res_by_token(token: str):
 def precheckin_info(token: str):
 	"""Stay summary for the pre-arrival check-in page."""
 	res = _res_by_token(token)
-	if res.status not in ("Confirmed", "Checked In"):
+	if res.status not in ("Confirmed", "Checked In", "Pending Payment", "Requested"):
 		frappe.throw("This booking is no longer active.")
 	prop = frappe.get_doc("Property", res.property)
 	guest = frappe.get_doc("Guest", res.guest)
