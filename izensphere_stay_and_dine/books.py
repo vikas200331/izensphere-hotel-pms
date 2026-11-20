@@ -214,12 +214,6 @@ def _revenue(property: str, start, end) -> dict:
 		   WHERE property = %(p)s AND status = 'Delivered' AND IFNULL(nc, 0) = 0
 		     AND DATE(creation) BETWEEN %(s)s AND %(e)s""",
 		{"p": property, "s": start, "e": end})[0][0])
-	# a confirmed function counts once it has been held
-	rev["banquets"] += flt(frappe.db.sql(  # nosemgrep: frappe-sql-format-injection -- values are parameterized; the interpolated text is a module constant
-		f"""SELECT COALESCE(SUM(taxable_amount), 0) FROM `tabVenue Booking`
-		   WHERE property = %(p)s AND event_date BETWEEN %(s)s AND %(e)s
-		     AND {BANQUET_HELD}""",
-		{"p": property, "s": start, "e": end, "t": nowdate()})[0][0])
 	# a credit note on a closed bill writes no charge line (on an open one
 	# it is an Allowance line, already counted above)
 	rev["allowances"] -= flt(frappe.db.sql(
@@ -234,20 +228,14 @@ def _revenue(property: str, start, end) -> dict:
 
 
 def tax_collected(property: str, start, end) -> float:
-	"""Tax on guest bills (folio charges) plus banquets billed outside a
-	folio. Tax on restaurant bills paid at the outlet is not split out."""
+	"""Tax on guest bills (folio charges). Tax on restaurant bills paid at the outlet is not split out."""
 	folio = frappe.db.sql(
 		"""SELECT COALESCE(SUM(fc.gst_amount), 0)
 		   FROM `tabFolio Charge` fc JOIN `tabFolio` f ON fc.parent = f.name
 		   WHERE f.property = %(p)s AND fc.posting_date BETWEEN %(s)s AND %(e)s
 		     AND fc.charge_type NOT IN ('Opening Balance')""",
 		{"p": property, "s": start, "e": end})[0][0]
-	banquet = frappe.db.sql(  # nosemgrep: frappe-sql-format-injection -- values are parameterized; the interpolated text is a module constant
-		f"""SELECT COALESCE(SUM(tax_amount), 0) FROM `tabVenue Booking`
-		   WHERE property = %(p)s AND event_date BETWEEN %(s)s AND %(e)s
-		     AND {BANQUET_HELD} AND IFNULL(posted_to_folio, 0) = 0""",
-		{"p": property, "s": start, "e": end, "t": nowdate()})[0][0]
-	return _r(flt(folio) + flt(banquet))
+	return _r(flt(folio))
 
 
 def _bills_in(property: str, start, end):

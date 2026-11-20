@@ -109,14 +109,6 @@ class TestPostingPaths(unittest.TestCase):
 				api.post_stay_charge("R", "Misc", "x", -50, 5, 0)
 			post.assert_not_called()
 
-	def test_banquet_billing_does_not_use_the_checked_entry_point(self):
-		import inspect
-
-		from izensphere_stay_and_dine import banquet
-		src = inspect.getsource(banquet.post_to_folio)
-		self.assertIn("_post_folio_charge", src)
-		self.assertNotIn("add_folio_charge", src)
-
 	def test_internal_poster_is_not_whitelisted(self):
 		self.assertNotIn(api._post_folio_charge, frappe.whitelisted)
 		self.assertIn(api.add_folio_charge, frappe.whitelisted)

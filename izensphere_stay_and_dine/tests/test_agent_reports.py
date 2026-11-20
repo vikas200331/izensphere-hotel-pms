@@ -12,7 +12,7 @@ from izensphere_stay_and_dine.tests.audit_fixtures import PROP_A, AuditTestCase,
 REPORT_TOOLS = {
 	"manager_flash", "cashier_shift_report", "voids_allowances_report",
 	"sla_report", "outlets", "outlet_dashboard", "wastage_report",
-	"banquet_register", "list_report_datasets", "run_custom_report",
+	"list_report_datasets", "run_custom_report",
 	"list_report_packs", "run_report_pack",
 }
 BUILDER = {"list_report_datasets", "run_custom_report", "list_report_packs",
@@ -29,7 +29,7 @@ EXPECTED = {
 	# no manager's flash: the hotel's revenue and occupancy are not the desk's
 	"Front Desk": (
 		{"cashier_shift_report", "sla_report", "outlets",
-		 "outlet_dashboard", "wastage_report", "banquet_register", *BUILDER},
+		 "outlet_dashboard", "wastage_report", *BUILDER},
 		FRONT_DESK | HK | OPS | FO_EXTRA | FNB,
 		{"front_office", "housekeeping", "fnb", "engineering", "laundry"}),
 	"Night Auditor": (
@@ -38,7 +38,7 @@ EXPECTED = {
 		{"front_office", "hotel_manager"}),
 	"Finance": (
 		{"manager_flash", "cashier_shift_report", "voids_allowances_report",
-		 "outlets", "outlet_dashboard", "wastage_report", "banquet_register",
+		 "outlets", "outlet_dashboard", "wastage_report",
 		 *BUILDER},
 		FRONT_DESK | {"folio_charges", "payments", "voids", "contribution",
 		              "overdue_by_company", "dso"}

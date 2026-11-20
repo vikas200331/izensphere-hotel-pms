@@ -11,7 +11,6 @@
     8. Revenue & Reports
     9. Direct Booking
     10. Settings & Administration
-    + Banquets & Events (Preserved for Phase 2).
 */
 
 import { toFullPath } from "./routing"
@@ -20,7 +19,6 @@ import {
   BedDouble,
   Building2,
   CalendarDays,
-  CalendarRange,
   ClipboardList,
   Clock,
   ExternalLink,
@@ -34,7 +32,6 @@ import {
   Boxes,
   Printer,
   Receipt,
-  ScrollText,
   Settings as SettingsIcon,
   Smartphone,
   Store,
@@ -364,26 +361,6 @@ export const APPS: AppDef[] = [
     ],
     extraPrefixes: ["/settings", "/room-types", "/rooms", "/health", "/go-live"],
   },
-
-  // Preserved for Phase 2: Banquets & Events
-  {
-    id: "events",
-    name: "Banquets & Events",
-    icon: CalendarRange,
-    tint: APP_TILE,
-    description: "Function prospecting, quotations, and event orders (Phase 2).",
-    roles: ["Revenue Manager", "Hotel Admin", "System Manager", "Administrator"],
-    items: [
-      { to: "/banquet", label: "Banquets", icon: CalendarRange },
-      { to: "/banquet-month", label: "Month Availability", icon: CalendarRange },
-      { to: "/banquet-diary", label: "Function Diary", icon: CalendarDays },
-      { to: "/banquet-registers", label: "Registers", icon: ScrollText },
-      { to: "/banquet-catalogue", label: "Menus & Services", icon: UtensilsCrossed },
-      { to: "/events", label: "All Functions", icon: ListChecks },
-      { to: "/venues", label: "Halls & Venues", icon: Landmark },
-    ],
-    extraPrefixes: ["/banquet"],
-  },
 ]
 
 /** Alias mapping to preserve full backwards compatibility with existing properties' enabled_modules setting */
@@ -398,7 +375,6 @@ const MODULE_ALIASES: Record<string, string[]> = {
   "revenue": ["revenue"],
   "direct-booking": ["direct-booking", "booking-engine"],
   "admin": ["admin"],
-  "events": ["events"],
 }
 
 /** Which app owns a path? Longest matching item route wins; "/" only exact. */

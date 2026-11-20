@@ -745,40 +745,10 @@ class History:
 				             round(due, 2), mode="Bank Transfer",
 				             reference=f"NEFT {getdate(day).strftime('%d%m')}")
 
-	# -- banquets ------------------------------------------------------------
+	# -- banquets (removed) --------------------------------------------------
 
 	def _functions_desk(self, day: str) -> None:
-		from izensphere_stay_and_dine import banquet
-		for f in self.functions:
-			if f["enquire"] == day and not f["doc"]:
-				out = self.attempt(
-					"banquet_enquiries", banquet.create_enquiry, PROPERTY, f["venue"],
-					f["event"], f["customer"], event_type=f["type"], attendees=f["pax"],
-					customer_phone=f"+91 98{self.rng.randint(10000000, 99999999)}",
-					source="Phone", session="Evening")
-				if not out:
-					continue
-				f["doc"] = out.get("function") or out.get("name")
-				if f["menu"]:
-					self.attempt("banquet_menus", banquet.add_menu, f["doc"], f["menu"],
-					             qty=f["pax"])
-				self.attempt("banquet_quotes", banquet.generate_quote, f["doc"])
-				banquet.set_status(f["doc"], "Tentative")
-			elif f["doc"] and day == f["confirm"]:
-				self.attempt("banquet_confirmed", banquet.set_status, f["doc"], "Confirmed")
-				total = float(frappe.db.get_value("Venue Booking", f["doc"], "grand_total") or 0)
-				if total:
-					self.attempt("banquet_receipts", banquet.record_receipt, f["doc"],
-					             round(total * 0.3, 2), mode="Bank Transfer", kind="Advance")
-			elif f["doc"] and day == add_days(f["event"], 1):
-				total, paid = frappe.db.get_value(
-					"Venue Booking", f["doc"], ["grand_total", "advance_received"]) or (0, 0)
-				rest = round(float(total or 0) - float(paid or 0), 2)
-				if rest > 0:
-					self.attempt("banquet_receipts", banquet.record_receipt, f["doc"], rest,
-					             mode="Bank Transfer", kind="Payment")
-				self.attempt("banquet_closed", banquet.close_out, f["doc"],
-				             pax_actual=f["pax"] - self.rng.randint(0, 12))
+		return
 
 	# -- the agent, and the end of the day -----------------------------------
 

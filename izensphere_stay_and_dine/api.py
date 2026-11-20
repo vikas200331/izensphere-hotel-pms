@@ -3244,7 +3244,6 @@ _GUEST_LINKS = [  # every doctype that points at a Guest
 	("Reservation", "guest"), ("Folio", "guest"),
 	("Service Ticket", "guest"), ("Lost And Found Item", "guest"),
 	("Security Deposit", "guest"),
-	("Venue Booking", "customer"),  # banquet uses customer, not guest
 	("WhatsApp Message", "guest"),
 ]
 
@@ -5454,43 +5453,6 @@ def tape_chart_hourly(property: str, date: str | None = None):
 		r["bookings"] = by_room.get(r.name, [])
 	return {"date": str(d), "start_hour": start_h, "end_hour": end_h,
 	        "rooms": rooms}
-
-
-@frappe.whitelist()
-@require_roles("Front Desk", "Revenue Manager", "Kamra Agent")
-def venue_calendar(property: str, start_date: str | None = None, days: int = 14):
-	"""Venues × dates with their bookings - the banquet/function diary. Shows
-	each venue's schedule so you can see availability and spot conflicts."""
-	from frappe.utils import getdate
-
-	start = getdate(start_date or nowdate())
-	days = min(int(days), 31)
-	end = add_days(start, days)
-	venues = frappe.get_all(
-		"Venue", filters={"property": property, "disabled": 0},
-		fields=["name", "venue_name", "capacity", "base_price"],
-		order_by="venue_name asc")
-	bookings = frappe.get_all(
-		"Venue Booking",
-		filters={"property": property,
-		         "event_date": ("between", [str(start), str(add_days(end, -1))])},
-		fields=["name", "venue", "event_type", "status", "event_date",
-		        "start_time", "end_time", "customer_name", "attendees",
-		        "quoted_amount", "advance_received"],
-		order_by="event_date asc, start_time asc")
-	by_venue = {}
-	for b in bookings:
-		b["start_time"] = str(b.start_time or "")[:5]
-		b["end_time"] = str(b.end_time or "")[:5]
-		b["event_date"] = str(b.event_date)
-		by_venue.setdefault(b.venue, []).append(b)
-	for v in venues:
-		v["bookings"] = by_venue.get(v.name, [])
-	return {
-		"start": str(start), "days": days,
-		"dates": [str(add_days(start, i)) for i in range(days)],
-		"venues": venues,
-	}
 
 
 @frappe.whitelist()
@@ -7758,11 +7720,6 @@ def group_detail(group_booking: str):
 		r["own_balance"] = round(own.get(r.name, 0), 2)
 		r["amount"] = flt(r.amount_after_tax)
 	event = None
-	if gb.get("event"):
-		event = frappe.db.get_value(
-			"Venue Booking", gb.event,
-			["name", "venue", "event_type", "event_date", "status",
-			 "attendees", "quoted_amount"], as_dict=True)
 	bill = frappe.get_all(
 		"Folio", filters={"group_booking": gb.name, "folio_type": "Group"},
 		fields=["name", "status", "balance"], order_by="creation desc", limit=1)
@@ -8191,33 +8148,13 @@ def create_group_block(property: str, group_name: str, check_in_date: str,
 			"block_rate": float(b.get("block_rate") or 0),
 		})
 	gb.insert(ignore_permissions=True)
-	event = None
-	if venue:
-		ev = frappe.get_doc({
-			"doctype": "Venue Booking",
-			"property": property,
-			"venue": venue,
-			"event_type": event_type or "Other",
-			"status": "Enquiry",
-			"event_date": event_date or check_in_date,
-			"customer_name": group_name,
-			"customer_phone": customer_phone,
-			"company": company,
-			"attendees": int(attendees or 0),
-			"group_booking": gb.name,
-		})
-		ev.insert(ignore_permissions=True)
-		gb.event = ev.name
-		gb.save(ignore_permissions=True)
-		event = ev.name
 	frappe.db.commit()  # nosemgrep: frappe-manual-commit -- persists the completed operation before returning to an external/public caller; reviewed as intentional
 	from izensphere_stay_and_dine.savings import log_action
 	log_action("group_block_drafted", "Group Booking", gb.name, property,
 	           minutes_saved=15,
 	           rationale=f"Drafted block '{group_name}' "
-	                     f"({sum(int(b.get('rooms_blocked') or 0) for b in blocks or [])} rooms"
-	                     f"{' + event' if event else ''})")
-	return {"group_booking": gb.name, "event": event, "status": gb.status}
+	                     f"({sum(int(b.get('rooms_blocked') or 0) for b in blocks or [])} rooms)")
+	return {"group_booking": gb.name, "status": gb.status}
 
 
 
@@ -8274,28 +8211,13 @@ def linked_records(doctype: str, name: str):
 		out.update(guest=r.guest, guest_name=r.guest_name, company=r.company,
 		           group_booking=r.group_booking)
 		out["folios"] = folios_for({"reservation": name})
-	elif doctype == "Venue Booking":
-		v = frappe.db.get_value("Venue Booking", name,
-			["company", "group_booking", "customer_name", "event_type"],
-			as_dict=True)
-		if not v:
-			frappe.throw("Event not found.")
-		out.update(company=v.company, group_booking=v.group_booking,
-		           guest_name=v.customer_name, event=name,
-		           event_type=v.event_type)
-		if v.group_booking:
-			out["folios"] = folios_for(
-				{"group_booking": v.group_booking, "folio_type": "Group"})
 	elif doctype == "Group Booking":
 		g = frappe.db.get_value("Group Booking", name,
 			["company", "event", "group_name"], as_dict=True)
 		if not g:
 			frappe.throw("Group not found.")
-		out.update(company=g.company, event=g.event, group_booking=name,
+		out.update(company=g.company, group_booking=name,
 		           group_name=g.group_name)
-		if g.event:
-			out["event_type"] = frappe.db.get_value(
-				"Venue Booking", g.event, "event_type")
 		out["folios"] = folios_for(
 			{"group_booking": name, "folio_type": "Group"})
 	elif doctype == "Guest":

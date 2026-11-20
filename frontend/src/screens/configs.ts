@@ -3,7 +3,6 @@ import { lazy } from "react"
 
 // Drawer panels load when a row is opened, not with the app shell
 const CompanyExtras = lazy(() => import("../components/CompanyExtras"))
-const EventLinks = lazy(() => import("../components/EventLinks"))
 const GroupControl = lazy(() => import("../components/GroupControl"))
 const RoomTypeMedia = lazy(() => import("../components/RoomTypeMedia"))
 const OutletWaiters = lazy(() => import("../components/OutletWaiters"))
@@ -279,67 +278,6 @@ export const travelAgentsConfig: ScreenConfig = {
   ],
 }
 
-export const venuesConfig: ScreenConfig = {
-  doctype: "Venue",
-  title: "Halls & Venues",
-  description:
-    "Banquet halls, lawns, poolsides, board rooms - the spaces functions are sold into.",
-  propertyScoped: true,
-  searchFields: ["venue_name", "venue_code"],
-  filters: [
-    {
-      field: "venue_type",
-      label: "Type",
-      options: [
-        "Banquet Hall",
-        "Lawn",
-        "Poolside",
-        "Rooftop",
-        "Board Room",
-        "Conference Hall",
-        "Restaurant",
-        "Other",
-      ],
-    },
-  ],
-  columns: [
-    { field: "venue_name", label: "Venue" },
-    { field: "venue_type", label: "Type", badge: true },
-    { field: "capacity", label: "Seats" },
-    { field: "base_price", label: `Day rental ${cur()}` },
-    { field: "hourly_rate", label: `Per hour ${cur()}` },
-  ],
-  form: [
-    { field: "venue_name", label: "Venue name", type: "data", required: true },
-    { field: "venue_code", label: "Code (prints on the event order)", type: "data" },
-    {
-      field: "venue_type",
-      label: "Type",
-      type: "select",
-      options: [
-        "Banquet Hall",
-        "Lawn",
-        "Poolside",
-        "Rooftop",
-        "Board Room",
-        "Conference Hall",
-        "Restaurant",
-        "Other",
-      ],
-    },
-    { field: "capacity", label: "Seats (maximum pax)", type: "int" },
-    { field: "min_capacity", label: "Minimum pax it's worth opening for", type: "int" },
-    { field: "area_sqft", label: "Area (sq ft)", type: "int" },
-    { field: "base_price", label: "Day rental", type: "currency" },
-    { field: "hourly_rate", label: "Hourly rental", type: "currency" },
-    { field: "min_hours", label: "Minimum hours", type: "int" },
-    { field: "gst_rate", label: "Rental GST %", type: "int" },
-    { field: "setup_styles", label: "Layouts it takes", type: "data" },
-    { field: "amenities", label: "Amenities", type: "data" },
-    { field: "disabled", label: "Disabled", type: "check" },
-  ],
-}
-
 export const roomBlocksConfig: ScreenConfig = {
   doctype: "Room Block",
   title: "Room Blocks",
@@ -369,78 +307,6 @@ export const roomBlocksConfig: ScreenConfig = {
     { field: "block_status", label: "Status", type: "select", options: ["Active", "Released"] },
     { field: "note", label: "Note", type: "data" },
   ],
-}
-
-const FUNCTION_STATUSES = [
-  "Enquiry",
-  "Tentative",
-  "Confirmed",
-  "Completed",
-  "Cancelled",
-  "Lost",
-]
-
-export const venueBookingsConfig: ScreenConfig = {
-  doctype: "Venue Booking",
-  dateFilter: { field: "event_date", label: "Event date" },
-  title: "All Functions",
-  description:
-    "Every function, one row each: enquiry → tentative → confirmed → completed. Open one to work on it properly.",
-  searchFields: ["customer_name", "venue", "event_name"],
-  filters: [
-    { field: "status", label: "Status", options: FUNCTION_STATUSES },
-    {
-      field: "event_type",
-      label: "Type",
-      options: [
-        "Wedding",
-        "Reception",
-        "Sangeet",
-        "Conference",
-        "Seminar",
-        "Product Launch",
-        "Birthday",
-        "Corporate Offsite",
-        "Other",
-      ],
-    },
-  ],
-  pageSize: 25,
-  propertyScoped: true,
-  orderBy: "event_date asc",
-  columns: [
-    { field: "name", label: "Ref" },
-    { field: "customer_name", label: "Customer" },
-    { field: "venue", label: "Hall" },
-    { field: "event_type", label: "Type", badge: true },
-    { field: "event_date", label: "Date" },
-    { field: "pax_guaranteed", label: "Pax" },
-    { field: "status", label: "Status", badge: true },
-    { field: "grand_total", label: `Quote ${cur()}` },
-    { field: "balance_due", label: `Due ${cur()}` },
-  ],
-  // The money, the menus and the negotiation live on the function sheet -
-  // this form only carries the facts you'd fix in a hurry.
-  form: [
-    { field: "venue", label: "Hall", type: "link", linkDoctype: "Venue", required: true },
-    { field: "event_type", label: "Event type", type: "select", options: ["Wedding", "Reception", "Sangeet", "Mehendi", "Engagement", "Conference", "Seminar", "Training", "Product Launch", "Birthday", "Anniversary", "Corporate Offsite", "Exhibition", "Other"] },
-    { field: "event_name", label: "Event name", type: "data" },
-    { field: "event_date", label: "Event date", type: "date", required: true },
-    { field: "end_date", label: "Ends (multi-day only)", type: "date" },
-    { field: "customer_name", label: "Customer name", type: "data", required: true },
-    { field: "customer_phone", label: "Customer phone", type: "data" },
-    { field: "customer_email", label: "Customer email", type: "data" },
-    { field: "company", label: "Company", type: "link", linkDoctype: "Corporate Account" },
-    { field: "attendees", label: "Expected pax", type: "int" },
-    { field: "pax_guaranteed", label: "Guaranteed pax", type: "int" },
-    { field: "status", label: "Status", type: "select", options: FUNCTION_STATUSES },
-    { field: "follow_up_date", label: "Next follow-up", type: "date" },
-    { field: "grand_total", label: "Quote total", type: "readonly" },
-    { field: "advance_received", label: "Received", type: "readonly" },
-    { field: "balance_due", label: "Balance due", type: "readonly" },
-    { field: "requirements", label: "What they asked for", type: "data" },
-  ],
-  extra: EventLinks,
 }
 
 export const lostFoundConfig: ScreenConfig = {

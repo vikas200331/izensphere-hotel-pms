@@ -30,7 +30,7 @@ ROLES = (
 	("Front Desk", "Front Desk",
 	 "Bookings, check-in and out, guests, folios and the cashier till."),
 	("Revenue Manager", "Revenue",
-	 "Rates, seasons, guardrails, channels, the booking engine and banquet sales."),
+	 "Rates, seasons, guardrails, channels and the booking engine."),
 	("Finance", "Finance",
 	 "Billing, ledgers, night audit, exports, tax and cashier controls."),
 	("Night Auditor", "Night Auditor",

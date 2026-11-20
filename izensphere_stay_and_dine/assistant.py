@@ -446,19 +446,14 @@ TOOLS = {
 	"create_group_block": (
 		"create_group_block",
 		"Draft a MICE piece of business in one go: a group booking with a "
-		"room block (list of {room_type, rooms_blocked, block_rate}) and "
-		"optionally its banquet event (venue, event_type, event_date, "
-		"attendees). Starts as Open (a proposal) - confirm it to hold rooms.",
+		"room block (list of {room_type, rooms_blocked, block_rate}). "
+		"Starts as Open (a proposal) - confirm it to hold rooms.",
 		{"group_name": {"type": "string"},
 		 "check_in_date": {"type": "string"},
 		 "check_out_date": {"type": "string"},
 		 "blocks": {"type": "array", "items": {"type": "object"}},
 		 "company": {"type": "string"},
-		 "cutoff_date": {"type": "string"},
-		 "venue": {"type": "string"},
-		 "event_type": {"type": "string"},
-		 "event_date": {"type": "string"},
-		 "attendees": {"type": "integer"}}, True, True),
+		 "cutoff_date": {"type": "string"}}, True, True),
 	"group_pickup_status": (
 		"group_detail",
 		"Group Rooms Control for a group booking: the block, per-room-type "
@@ -552,118 +547,6 @@ TOOLS = {
 		"message. Never in the same turn as the preview.",
 		{"reservation": {"type": "string"}, "reason": {"type": "string"},
 		 "note": {"type": "string"}}, False, True),
-
-	# ── banquets ────────────────────────────────────────────────────────
-	# The whole reason a banquet enquiry is worth answering in seconds: by
-	# the time the caller has finished describing the wedding, the hall is
-	# checked, the sheet exists and the menu is priced.
-	"banquet_availability": (
-		"banquet.venue_availability",
-		"Which halls are free for a date (and hours, and pax). A confirmed "
-		"function takes the hall; a tentative hold shows as a soft hold you "
-		"can still sell over. Always run this before opening an enquiry.",
-		{"event_date": {"type": "string"}, "end_date": {"type": "string"},
-		 "start_time": {"type": "string"}, "end_time": {"type": "string"},
-		 "pax": {"type": "integer"}}, True, False),
-	"banquet_catalogue": (
-		"banquet.banquet_catalogue",
-		"What the property sells at a function: menu packages (per plate, "
-		"with their courses) and services (LED wall, projector, DJ, podium, "
-		"stage, decor, bar). Read this before quoting anything.",
-		{}, True, False),
-	"banquet_enquiry": (
-		"banquet.create_enquiry",
-		"Open a function sheet from an enquiry. The hall's rack rental goes "
-		"on as the first line and a follow-up is diarised. Check "
-		"banquet_availability first.",
-		{"venue": {"type": "string"}, "event_date": {"type": "string"},
-		 "customer_name": {"type": "string"}, "event_type": {"type": "string"},
-		 "attendees": {"type": "integer"}, "customer_phone": {"type": "string"},
-		 "customer_email": {"type": "string"}, "company": {"type": "string"},
-		 "end_date": {"type": "string"}, "start_time": {"type": "string"},
-		 "end_time": {"type": "string"}, "source": {"type": "string"},
-		 "requirements": {"type": "string"}}, True, True),
-	"banquet_sheet": (
-		"banquet.function_sheet",
-		"One function in full: dates, pax, every line item, the negotiation "
-		"history, payment terms, what's been received and what it still "
-		"needs from somebody.",
-		{"function": {"type": "string"}}, False, False),
-	"banquet_add_menu": (
-		"banquet.add_menu",
-		"Put a menu package on a function. The quantity follows the "
-		"guaranteed pax on its own. Pass chargeable=0 to give it away - it "
-		"still prints on the event order, it just leaves the quote.",
-		{"function": {"type": "string"}, "menu": {"type": "string"},
-		 "qty": {"type": "number"}, "rate": {"type": "number"},
-		 "chargeable": {"type": "integer"}}, False, True),
-	"banquet_add_service": (
-		"banquet.add_service",
-		"Put a service on a function - projector, LED wall, DJ, podium, "
-		"stage, decor, laptop, bar. chargeable=0 makes it complimentary.",
-		{"function": {"type": "string"}, "service_item": {"type": "string"},
-		 "qty": {"type": "number"}, "rate": {"type": "number"},
-		 "chargeable": {"type": "integer"}}, False, True),
-	"banquet_negotiate": (
-		"banquet.negotiate",
-		"Move the price: a headline discount, or the hall rate. Every move "
-		"is snapshotted, so 'what did we send on the 3rd' stays answerable. "
-		"Confirm the new total with staff before calling.",
-		{"function": {"type": "string"}, "discount_amount": {"type": "number"},
-		 "venue_rental": {"type": "number"}, "note": {"type": "string"}},
-		False, True),
-	"banquet_status": (
-		"banquet.set_status",
-		"Move a function along: Enquiry → Tentative → Confirmed → Completed, "
-		"or out as Cancelled / Lost (a reason is required). Confirming takes "
-		"the hall and will refuse a clash.",
-		{"function": {"type": "string"}, "status": {"type": "string"},
-		 "reason": {"type": "string"}}, False, True),
-	"banquet_quote": (
-		"banquet.generate_quote",
-		"Stamp a quotation - bumps the version, dates it, and returns the "
-		"whole document to read back to the customer.",
-		{"function": {"type": "string"}, "valid_days": {"type": "integer"}},
-		False, True),
-	"banquet_pipeline": (
-		"banquet.banquet_pipeline",
-		"The banquet sales picture by month and by status: what's confirmed, "
-		"what's still in play, what's outstanding, conversion, and why "
-		"business went away.",
-		{"from_date": {"type": "string"}, "to_date": {"type": "string"},
-		 "months": {"type": "integer"}}, True, False),
-	"banquet_month": (
-		"banquet.month_availability",
-		"Every hall and every session across a whole month - the grid that "
-		"answers 'do you have the 14th of December?' in one look. Sessions "
-		"are Morning / Afternoon / Evening, which is how halls are sold.",
-		{"month": {"type": "string"}}, True, False),
-	"banquet_close_out": (
-		"banquet.close_out",
-		"Hand the hall back after the function: record the covers actually "
-		"served, deduct any damage from the refundable deposit (a reason is "
-		"required) and return the rest. Closes the function.",
-		{"function": {"type": "string"}, "damage_amount": {"type": "number"},
-		 "damage_note": {"type": "string"}, "pax_actual": {"type": "integer"},
-		 "refund_deposit": {"type": "integer"}}, False, True),
-	"banquet_register": (
-		"banquet.banquet_register",
-		"The banquet office's books for a period: functions, quotations, "
-		"enquiries, receipts (the cash book) or sales - a rollup by hall, "
-		"event type and session.",
-		{"register": {"type": "string"}, "from_date": {"type": "string"},
-		 "to_date": {"type": "string"}}, True, False),
-	"banquet_menu_card": (
-		"banquet.menu_card",
-		"What will actually be served, course by course, with no prices on "
-		"it - the sheet the customer signs off and the kitchen cooks from.",
-		{"function": {"type": "string"}}, False, False),
-	"banquet_reminders": (
-		"banquet.banquet_reminders",
-		"Everything across the property that needs chasing today: follow-ups "
-		"gone quiet, tentative holds about to lapse, payments due, event "
-		"orders missing before the date.",
-		{"days": {"type": "integer"}}, True, False),
 }
 
 
@@ -1269,14 +1152,13 @@ What Izensphere Stay and Dine does and where to find it:
   assigns a tax invoice number (logo, tax ID and the tax details the
   property's country requires).
 - Reports: one Reports hub - manager flash, shift report, F&B dashboard,
-  banquet registers, SLA, voids, department packs (Front Office,
+  SLA, voids, department packs (Front Office,
   Housekeeping, F&B, Hotel Manager) and custom reports (build, save, group
   and drill down, email daily or weekly). Which reports a user sees follows their
   role.
 - Housekeeping: room board + a phone app at /kamra/hk.
 - Revenue: rate plans, seasons, vouchers, rate guardrails.
-- Events: Venue Bookings and a Venue Calendar (banquet/function diary);
-  Experiences cover spa/tours as booking add-ons.
+- Experiences: cover spa/tours as booking add-ons.
 - Inventory: Rooms; Room Types - open a room type to add photos (image URLs),
   amenities (one per line) and a description shown on the public booking engine.
 - Settings: property & GST, booking page (hero image, amenities, description),

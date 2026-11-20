@@ -345,26 +345,6 @@ MODULES: tuple[Module, ...] = (
 		),
 	),
 	Module(
-		"events", "Banquets & Groups", "Quotation margins, payment milestones and follow-ups for functions.",
-		editors=("Hotel Admin", "Revenue Manager"), toggle=True,
-		related=(("Halls & venues", "/venues"), ("Menus & services", "/banquet-catalogue")),
-		sections=(
-			Section("margins", "Quotation margins", "Function quotes are checked against these before they go out.", (
-				S("banquet_target_margin", "Target margin", "number", 40, min=0, max=95, unit="%"),
-				S("banquet_floor_margin", "Floor margin", "number", 25, min=0, max=95, unit="%",
-				  hint="Quotes below this are flagged for approval."),
-			)),
-			Section("payments", "Default payment milestones", "Applied to a new function; each can be changed on the function.", (
-				S("banquet_advance_pct", "Advance at confirmation", "number", 25, min=0, max=100, unit="%"),
-				S("banquet_interim_pct", "Interim payment", "number", 50, min=0, max=100, unit="%"),
-				S("banquet_interim_days", "Interim due", "number", 15, min=0, max=365, unit="days before"),
-			)),
-			Section("followup", "Sales follow-up", "", (
-				S("banquet_follow_up_days", "Follow up an enquiry after", "number", 2, min=0, max=60, unit="days"),
-			)),
-		),
-	),
-	Module(
 		"revenue", "Revenue", "How far the house may oversell, plus demand pricing.",
 		editors=("Hotel Admin", "Revenue Manager"), toggle=True,
 		related=(("Rate plans", "/rate-plans"), ("Seasons", "/seasons"), ("Guardrails", "/guardrails")),

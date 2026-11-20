@@ -599,7 +599,7 @@ function AuditReport({ p }: { p: Pack }) {
           { key: "label", label: "" },
           col("rooms_sold", "Room nights", "num"), col("occupancy_pct", "Occ %", "num"),
           col("room_revenue", "Rooms (net of discounts)"), col("adr", "ADR"), col("revpar", "RevPAR"),
-          col("food", "Food"), col("beverage", "Beverage"), col("banquets", "Banquets"),
+          col("food", "Food"), col("beverage", "Beverage"),
           col("meal_plan_minibar", "Meal plan & minibar"), col("other", "Other"),
           col("total_revenue", "Total"),
         ]}
@@ -614,14 +614,6 @@ function AuditReport({ p }: { p: Pack }) {
           col("food2", "Food, YTD"), col("beverage2", "Beverage, YTD"),
         ]}
         rows={[...outlets.values()]}
-      />
-      <Sub>{t("Banquets")}</Sub>
-      <DataTable
-        cols={[
-          { key: "label", label: "" }, col("functions", "Functions", "num"),
-          col("fnb", "Food & beverage"), col("hall", "Hall"), col("other", "Other"), col("total", "Total"),
-        ]}
-        rows={periods.map((per) => ({ label: t(per.label), ...per.banquet }))}
       />
       <Sub>{t("Balances brought and carried forward")}</Sub>
       <DataTable

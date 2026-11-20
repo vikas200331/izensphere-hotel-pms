@@ -39,13 +39,6 @@ const FinishSetup = lazy(() => import("./screens/FinishSetup"))
 const SystemHealth = lazy(() => import("./screens/SystemHealth"))
 const BookingEngine = lazy(() => import("./screens/BookingEngine"))
 const Developers = lazy(() => import("./screens/Developers"))
-const Banquet = lazy(() => import("./screens/Banquet"))
-const BanquetDiary = lazy(() => import("./screens/BanquetDiary"))
-const BanquetMonth = lazy(() => import("./screens/BanquetMonth"))
-const BanquetRegisters = lazy(() => import("./screens/BanquetRegisters"))
-const BanquetCatalogue = lazy(() => import("./screens/BanquetCatalogue"))
-const BanquetFunction = lazy(() => import("./screens/BanquetFunction"))
-const BanquetDocument = lazy(() => import("./screens/BanquetDocument"))
 const Agents = lazy(() => import("./screens/Agents"))
 const Activity = lazy(() => import("./screens/Activity"))
 const AppLauncher = lazy(() => import("./screens/AppLauncher"))
@@ -276,29 +269,6 @@ export default function App() {
             path="travel-agents"
             element={<ConfiguredScreen config="travelAgentsConfig" />}
           />
-          <Route
-            path="events"
-            element={<ConfiguredScreen config="venueBookingsConfig" />}
-          />
-          <Route
-            path="venues"
-            element={<ConfiguredScreen config="venuesConfig" />}
-          />
-          {/* The old venue calendar created bare Venue Bookings with no
-              rental line, no follow-up and no owner - a function that
-              quoted zero. The diary is its superset, and the only door. */}
-          <Route
-            path="venue-calendar"
-            element={<Navigate to="/banquet-diary" replace />}
-          />
-          {/* banquets: the function business, enquiry → event order → bill */}
-          <Route path="banquet" element={<Banquet />} />
-          <Route path="banquet-diary" element={<BanquetDiary />} />
-          <Route path="banquet-month" element={<BanquetMonth />} />
-          <Route path="banquet-registers" element={<BanquetRegisters />} />
-          <Route path="banquet-catalogue" element={<BanquetCatalogue />} />
-          <Route path="banquet/:name" element={<BanquetFunction />} />
-          <Route path="banquet/:name/:kind" element={<BanquetDocument />} />
           <Route path="groups" element={<Groups />} />
           <Route
             path="lost-found"

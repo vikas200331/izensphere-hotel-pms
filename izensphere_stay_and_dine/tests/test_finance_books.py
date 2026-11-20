@@ -216,8 +216,6 @@ class TestFinanceBooks(AuditTestCase):
 		ins({"doctype": "Cashier Transaction", "property": PROP_A, "session": "UT-S",
 		     "kind": "Paid Out", "mode": "Cash", "amount": -80, "business_date": d(0)})
 		self.bill(500, bill_date=d(0))  # awaiting approval: not a cost yet
-		ins({"doctype": "Venue Booking", "property": PROP_A, "status": "Confirmed",
-		     "event_date": d(2), "taxable_amount": 1000, "tax_amount": 180})
 		p = books.profit_and_loss(PROP_A, d(0), d(5))
 		rev = {r["key"]: r["amount"] for r in p["revenue"]}
 		self.assertEqual(rev["allowances"], -250)

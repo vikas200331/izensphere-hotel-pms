@@ -96,18 +96,7 @@ def _outlets(property: str, start, end) -> list[dict]:
 
 
 def _banquets(property: str, start, end) -> dict:
-	row = frappe.db.sql(
-		"""
-		SELECT COUNT(*) AS functions, COALESCE(SUM(fnb_spend), 0) AS fnb,
-		       COALESCE(SUM(venue_rental), 0) AS hall,
-		       COALESCE(SUM(taxable_amount), 0) AS total
-		FROM `tabVenue Booking`
-		WHERE property = %(p)s AND status IN ('Confirmed', 'Completed')
-		  AND event_date BETWEEN %(s)s AND %(e)s
-		""", {"p": property, "s": start, "e": end}, as_dict=True)[0]
-	fnb, hall, total = flt(row.fnb), flt(row.hall), flt(row.total)
-	return {"functions": int(row.functions or 0), "fnb": fnb, "hall": hall,
-	        "other": max(0.0, total - fnb - hall), "total": total}
+	return {"functions": 0, "fnb": 0.0, "hall": 0.0, "other": 0.0, "total": 0.0}
 
 
 def _period(property: str, label: str, start, end, total_rooms: int) -> dict:
@@ -119,7 +108,7 @@ def _period(property: str, label: str, start, end, total_rooms: int) -> dict:
 	bev = sum(o["beverage"] for o in outlets) + f["beverage"]
 	nights = int(f["room_nights"])
 	available = total_rooms * (date_diff(end, start) + 1)
-	total = f["rooms"] + food + bev + banq["total"] + f["meal_plan_minibar"] + f["other"]
+	total = f["rooms"] + food + bev + f["meal_plan_minibar"] + f["other"]
 	return {
 		"label": label, "from_date": str(start), "to_date": str(end),
 		"rooms_sold": nights,
@@ -128,7 +117,7 @@ def _period(property: str, label: str, start, end, total_rooms: int) -> dict:
 		"adr": round(f["rooms"] / nights, 0) if nights else 0,
 		"revpar": round(f["rooms"] / available, 0) if available else 0,
 		"food": round(food, 2), "beverage": round(bev, 2),
-		"banquets": banq["total"], "meal_plan_minibar": f["meal_plan_minibar"],
+		"banquets": 0.0, "meal_plan_minibar": f["meal_plan_minibar"],
 		"other": f["other"], "total_revenue": round(total, 2),
 		"outlets": outlets, "banquet": banq,
 	}

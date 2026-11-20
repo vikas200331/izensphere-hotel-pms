@@ -182,21 +182,3 @@ def next_day_offset() -> int:
 	"""
 	_DAY[0] += 1
 	return _DAY[0]
-
-
-def enquiry(f: dict, **kw) -> str:
-	"""A function on the test hall, evening, 19:00-23:00, on a day no other
-	test is using."""
-	from frappe.utils import add_days, nowdate
-
-	from izensphere_stay_and_dine import banquet as bq
-
-	args = {
-		"property": PROPERTY, "venue": f["hall"],
-		"event_date": add_days(nowdate(),
-		                       kw.pop("day_offset", None) or next_day_offset()),
-		"customer_name": "Test Customer", "attendees": 200,
-		"start_time": "19:00", "end_time": "23:00",
-	}
-	args.update(kw)
-	return bq.create_enquiry(**args)["function"]

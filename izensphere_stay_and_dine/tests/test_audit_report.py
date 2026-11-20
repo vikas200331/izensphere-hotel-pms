@@ -46,23 +46,18 @@ class AuditReportTestCase(AuditTestCase):
 		room_bill = pos.create_order(outlet, [{"menu_item": gin, "qty": 1}],
 		                             room=self.room, order_type="Room Service")
 		pos.deliver_order(room_bill["order"])
-		vb = frappe.get_doc({"doctype": "Venue Booking", "property": PROP_A,
-		                     "status": "Confirmed", "event_date": TODAY}
-		                    ).insert(ignore_permissions=True, ignore_mandatory=True)
-		# a function's totals as its quote left them
-		vb.db_set({"fnb_spend": 5000, "venue_rental": 2000, "taxable_amount": 7500})
 		r = audit_report.build(PROP_A, TODAY)
 		day, mtd, ytd = r["periods"]
 		self.assertEqual((day["food"], day["beverage"]), (400, 1000))
-		self.assertEqual(day["banquets"], 7500)
-		self.assertEqual(day["banquet"]["fnb"], 5000)
+		self.assertEqual(day["banquets"], 0.0)
+		self.assertEqual(day["banquet"]["fnb"], 0.0)
 		bar = next(o for o in day["outlets"] if o["outlet"] == outlet)
 		self.assertEqual((bar["bills"], bar["to_rooms"]), (2, 500))
 		self.assertGreaterEqual(day["rooms_sold"], 1)
 		self.assertGreater(day["room_revenue"], 0)
 		# the room-charged gin is on the folio too, but counted once
 		self.assertAlmostEqual(day["total_revenue"],
-		                       day["room_revenue"] + 1400 + 7500
+		                       day["room_revenue"] + 1400
 		                       + day["meal_plan_minibar"] + day["other"], 2)
 		for per in (mtd, ytd):
 			self.assertGreaterEqual(per["total_revenue"], day["total_revenue"])

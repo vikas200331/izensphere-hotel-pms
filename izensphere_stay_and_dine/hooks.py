@@ -55,9 +55,6 @@ scheduler_events = {
 			"izensphere_stay_and_dine.group_blocks.release_expired_blocks",
 			"izensphere_stay_and_dine.no_show.release_non_guaranteed_arrivals",
 		],
-		# 08:30 - the banquet team's morning list: follow-ups gone quiet,
-		# tentative holds about to lapse, payments due, event orders missing
-		"30 8 * * *": ["izensphere_stay_and_dine.banquet.run_banquet_reminders"],
 		# 04:15 - wipe the public demo so it cannot be used as a live PMS
 		# (no-op unless kamra_demo_mode is on and the site is a playground)
 		"15 4 * * *": ["izensphere_stay_and_dine.scripts.reset_demo.scheduled"],
@@ -251,9 +248,8 @@ after_migrate = ["izensphere_stay_and_dine.install.after_migrate"]
 # Every Kamra DocType linking a Property fails closed under the opt-in
 # kamra_strict_property_scope site setting; with it off these add nothing.
 _PROPERTY_SCOPED = (
-	"Agent Action Log", "AI Assistant Settings", "Allowance Request", "Banquet Checklist Template",
-	"Banquet Dish", "Banquet Function Task", "Banquet Menu",
-	"Banquet Service Item", "Cancelled Invoice", "Cash Transfer", "Cashier", "Cashier Session", "Cashier Terminal",
+	"Agent Action Log", "AI Assistant Settings", "Allowance Request",
+	"Cancelled Invoice", "Cash Transfer", "Cashier", "Cashier Session", "Cashier Terminal",
 	"Cashier Transaction", "Channel Manager Connection",
 	"Channel Provider Connection", "City Ledger Account", "City Ledger Entry",
 	"Copilot Conversation", "Credit Note", "Discount Voucher", "Exchange Rate",
@@ -269,7 +265,7 @@ _PROPERTY_SCOPED = (
 	"Reservation",
 	"Long Stay Discount", "Revenue Budget", "Room", "Room Block", "Room Type", "Season",
 	"Security Deposit", "Sellable Unit", "Service Ticket", "Shift Handover", "SOP Template", "Ticket Event",
-	"Transaction Code", "Turnover Profile", "Vendor", "Vendor Bill", "Venue", "Venue Booking",
+	"Transaction Code", "Turnover Profile", "Vendor", "Vendor Bill",
 	"WhatsApp Message", "ZATCA Invoice", "ZATCA Settings",
 )
 
@@ -296,7 +292,7 @@ doc_events = {
 		"on_trash": "izensphere_stay_and_dine.realtime.notify",
 	}
 	for doctype in ("Reservation", "Folio", "Room", "Housekeeping Task",
-	                "Venue Booking", "Group Booking", "POS Order",
+	                "Group Booking", "POS Order",
 	                "Service Ticket", "Agent Action Log")
 }
 

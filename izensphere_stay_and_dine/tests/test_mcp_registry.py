@@ -44,7 +44,6 @@ def test_groups_map_to_modules():
 	assert BY_NAME["hk_queue"].module == "housekeeping"
 	assert BY_NAME["pos_menu"].module == "fnb"
 	assert BY_NAME["laundry_rates"].module == "fnb"
-	assert BY_NAME["banquet_enquiry"].module == "events"
 	assert BY_NAME["record_payment"].module == "finance"
 	assert GROUP_MODULE["Housekeeping"] == "housekeeping"
 
@@ -57,12 +56,6 @@ def test_module_allowed_filters():
 	assert BY_NAME["setup_property"].module == "admin"
 	assert module_allowed(BY_NAME["setup_property"], modules={"admin", "front-desk"})
 	assert not module_allowed(BY_NAME["setup_property"], modules={"front-desk"})
-
-
-def test_duplicate_banquet_receipt_is_split():
-	assert "banquet_record_receipt" in BY_NAME
-	assert "banquet_receipt_document" in BY_NAME
-	assert "banquet_receipt" not in BY_NAME
 
 
 def test_stdio_sidecar_runs_at_eof():
