@@ -4888,7 +4888,7 @@ _ROOM_SUPERVISORS = {HK_SUPERVISOR, "Front Desk", "Hotel Admin",
                      "System Manager", "Kamra Agent"}
 # what an attendant may set by hand; passing a room (Inspected / Ready) or
 # taking it out of order is a supervisor's call
-_ATTENDANT_STATUSES = {"Clean", "Dirty"}
+_ATTENDANT_STATUSES = {"Clean", "Dirty", "Cleaning in Progress"}
 
 
 def _is_room_supervisor() -> bool:
@@ -4904,7 +4904,10 @@ def set_housekeeping_status(room: str, status: str):
 	can pass a room or take it out of order, nobody can touch a room of a
 	property they aren't assigned to, and removing Write on Room in the
 	role permissions actually removes the ability."""
-	allowed = {"Clean", "Dirty", "Inspected", "Ready", "Out of Order"}
+	allowed = {
+		"Clean", "Dirty", "Cleaning in Progress", "Inspected", "Ready",
+		"Out of Order", "Maintenance",
+	}
 	if status not in allowed:
 		frappe.throw(f"Invalid status. Use one of {sorted(allowed)}")
 	r = frappe.db.get_value("Room", room, ["property", "housekeeping_status"],

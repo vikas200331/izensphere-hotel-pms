@@ -23,9 +23,16 @@ const NO_FLOOR = "__none__"
 
 type StatusFilter =
   | "all"
-  | "vacant_ready"
-  | "dirty"
+  | "available"
+  | "reserved"
   | "occupied"
+  | "dirty"
+  | "cleaning"
+  | "clean"
+  | "inspected"
+  | "out_of_order"
+  | "maintenance"
+  | "vacant_ready"
   | "arriving"
   | "departing"
   | "out"
@@ -33,22 +40,39 @@ type StatusFilter =
 
 function matches(r: BoardRoom, f: StatusFilter) {
   switch (f) {
+    case "available":
     case "vacant_ready":
       return (
         r.occupancy_status !== "Occupied" &&
         !r.block &&
         ["Clean", "Inspected", "Ready"].includes(r.housekeeping_status)
       )
-    case "dirty":
-      return r.housekeeping_status === "Dirty"
+    case "reserved":
+    case "arriving":
+      return !!r.arrival || r.occupancy_status === "Reserved"
     case "occupied":
       return r.occupancy_status === "Occupied"
-    case "arriving":
-      return !!r.arrival
-    case "departing":
-      return !!r.stay?.departing_today
+    case "dirty":
+      return r.housekeeping_status === "Dirty"
+    case "cleaning":
+      return (
+        r.housekeeping_status === "Cleaning in Progress" ||
+        (!!r.task && r.task.status === "In Progress")
+      )
+    case "clean":
+      return r.housekeeping_status === "Clean"
+    case "inspected":
+      return r.housekeeping_status === "Inspected" || r.housekeeping_status === "Ready"
+    case "out_of_order":
     case "out":
       return !!r.block || r.housekeeping_status === "Out of Order"
+    case "maintenance":
+      return (
+        r.housekeeping_status === "Maintenance" ||
+        (!!r.task && r.task.type === "Maintenance")
+      )
+    case "departing":
+      return !!r.stay?.departing_today
     case "task":
       return !!r.task
     default:
@@ -122,13 +146,15 @@ export default function Rooms() {
   const count = (f: StatusFilter) => rooms.filter((r) => matches(r, f)).length
   const chips: { id: StatusFilter; label: string }[] = [
     { id: "all", label: t("All rooms") },
-    { id: "vacant_ready", label: t("Ready to sell") },
-    { id: "dirty", label: t("Dirty") },
+    { id: "available", label: t("Available") },
+    { id: "reserved", label: t("Reserved") },
     { id: "occupied", label: t("Occupied") },
-    { id: "arriving", label: t("Arriving today") },
-    { id: "departing", label: t("Departing today") },
-    { id: "out", label: t("Out of service") },
-    { id: "task", label: t("Open task") },
+    { id: "dirty", label: t("Dirty") },
+    { id: "cleaning", label: t("Cleaning in Progress") },
+    { id: "clean", label: t("Clean") },
+    { id: "inspected", label: t("Inspected") },
+    { id: "out_of_order", label: t("Out of Order") },
+    { id: "maintenance", label: t("Maintenance") },
   ]
   const floorLabel = (f: string) =>
     f === NO_FLOOR ? t("No floor set") : /floor/i.test(f) ? f : t("Floor {f}", { f })
@@ -378,7 +404,9 @@ function Legend() {
   const items: [string, string][] = [
     [t("Clean"), "bg-emerald-100 border-emerald-300"],
     [t("Inspected"), "bg-sky-100 border-sky-300"],
+    [t("Cleaning in Progress"), "bg-blue-100 border-blue-400"],
     [t("Dirty"), "bg-amber-100 border-amber-300"],
+    [t("Maintenance"), "bg-purple-100 border-purple-300"],
     [t("Out of service"), "bg-rose-100 border-rose-400"],
     [t("Occupied"), "bg-brand-700 border-brand-700"],
   ]

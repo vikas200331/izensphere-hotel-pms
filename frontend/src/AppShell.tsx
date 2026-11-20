@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react"
 import {
+  ChevronDown,
+  ChevronRight,
   IndianRupee,
   LayoutGrid,
   Moon,
@@ -313,13 +315,20 @@ export default function AppShell() {
       /* private window: the app still follows the page */
     }
   }, [currentApp])
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => ({
+    dashboard: true,
+    "front-desk": true,
+  }))
+
+  useEffect(() => {
+    if (currentApp?.id) {
+      setExpanded((prev) => ({ ...prev, [currentApp.id]: true }))
+    }
+  }, [currentApp?.id])
+
   const floor = location.pathname === "/pos" || location.pathname === "/kitchen"
   const { on: kiosk } = useKiosk()
   const canBook = BOOKING_ROLES.some((r) => roles.includes(r))
-
-  const items = (currentApp?.items ?? []).filter(
-    (item) => !item.roles || item.roles.some((r) => roles.includes(r)),
-  )
 
   const renderItem = (item: AppNavItem) =>
     item.href ? (
@@ -395,12 +404,12 @@ export default function AppShell() {
       {!kiosk && !demoMode && <SetupNag />}
       <div className="flex min-h-0 flex-1">
       {!kiosk && (
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-5 sm:sticky sm:top-0 sm:flex sm:h-screen sm:overflow-y-auto">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-4 sm:sticky sm:top-0 sm:flex sm:h-screen sm:overflow-y-auto">
         <NavLink
           to="/"
           end
           aria-label={t("Home")}
-          className="mb-5 flex items-center gap-2.5 rounded-lg px-1 outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
+          className="mb-4 flex items-center gap-2.5 rounded-lg px-1 outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
         >
           <img src={brand.logo || asset("izensphere-stay-and-dine-mark.svg")} alt="Izensphere Stay and Dine" className="size-8 object-contain" aria-hidden />
           <span className="min-w-0 leading-tight">
@@ -413,45 +422,63 @@ export default function AppShell() {
           </span>
         </NavLink>
 
-        {currentApp && (
-          <div className="mb-2 flex items-center gap-2 rounded-lg px-2 py-1.5">
-            <span
-              className={cn(
-                "flex size-6 items-center justify-center rounded-md",
-                currentApp.tint,
-              )}
-            >
-              <currentApp.icon className="size-3.5" aria-hidden />
-            </span>
-            <span className="text-sm font-semibold text-zinc-800">
-              {t(currentApp.name)}
-            </span>
-          </div>
-        )}
+        <nav className="flex-1 space-y-1 overflow-y-auto pr-0.5">
+          {apps.map((app) => {
+            const isCurrent = app.id === currentApp?.id
+            const isOpen = !!expanded[app.id]
+            const appItems = app.items.filter(
+              (item) => !item.roles || item.roles.some((r) => roles.includes(r)),
+            )
+            if (appItems.length === 0) return null
 
-        <nav className="space-y-0.5">
-          {(() => {
-            const groups: { label?: string; items: typeof items }[] = []
-            for (const item of items) {
-              const g = item.group
-              const last = groups[groups.length - 1]
-              if (!last || last.label !== g) {
-                groups.push({ label: g, items: [item] })
-              } else {
-                last.items.push(item)
-              }
-            }
-            return groups.map((g, gi) => (
-              <div key={g.label ?? `ungrouped-${gi}`} className={gi > 0 ? "mt-3" : undefined}>
-                {g.label ? (
-                  <div className="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
-                    {t(g.label)}
+            return (
+              <div key={app.id} className="rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpanded((prev) => ({ ...prev, [app.id]: !prev[app.id] }))
+                    if (!isOpen) {
+                      const first = appItems.find((i) => i.to)
+                      if (first?.to && !isCurrent) {
+                        navigate(first.to, { state: { app: app.id } })
+                      }
+                    }
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors",
+                    isCurrent
+                      ? "bg-brand-50 text-brand-900 font-bold"
+                      : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900",
+                  )}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <span
+                      className={cn(
+                        "flex size-5 shrink-0 items-center justify-center rounded",
+                        isCurrent
+                          ? "bg-brand-600 text-white"
+                          : "bg-zinc-100 text-zinc-500",
+                      )}
+                    >
+                      <app.icon className="size-3" aria-hidden />
+                    </span>
+                    <span className="truncate">{t(app.name)}</span>
                   </div>
-                ) : null}
-                <div className="space-y-0.5">{g.items.map(renderItem)}</div>
+                  {isOpen ? (
+                    <ChevronDown className="size-3.5 shrink-0 text-zinc-400" />
+                  ) : (
+                    <ChevronRight className="size-3.5 shrink-0 text-zinc-400" />
+                  )}
+                </button>
+
+                {isOpen && (
+                  <div className="ml-3 mt-0.5 space-y-0.5 border-l border-zinc-200 pl-2">
+                    {appItems.map(renderItem)}
+                  </div>
+                )}
               </div>
-            ))
-          })()}
+            )
+          })}
         </nav>
         <div className="mt-auto pt-6">
           <AlertSettings />

@@ -54,10 +54,20 @@ export const HK_TONE: Record<HkStatus, string> = {
   Inspected: "border-sky-300 bg-sky-50 text-sky-900",
   Ready: "border-teal-400 bg-teal-50 text-teal-900",
   Dirty: "border-amber-300 bg-amber-50 text-amber-900",
+  "Cleaning in Progress": "border-blue-400 bg-blue-50 text-blue-900",
   "Out of Order": "border-rose-300 bg-rose-50 text-rose-900",
+  Maintenance: "border-purple-300 bg-purple-50 text-purple-900",
 }
 
-const HK_SET: HkStatus[] = ["Dirty", "Clean", "Inspected", "Ready"]
+const HK_SET: HkStatus[] = [
+  "Dirty",
+  "Cleaning in Progress",
+  "Clean",
+  "Inspected",
+  "Ready",
+  "Out of Order",
+  "Maintenance",
+]
 
 /** What the person picks; the Room Block reason it is stored as. */
 const OUT_KINDS = [

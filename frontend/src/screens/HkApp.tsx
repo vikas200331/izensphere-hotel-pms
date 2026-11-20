@@ -49,7 +49,14 @@ const isVideo = (url: string) => /\.(mp4|mov|webm|m4v|3gp|avi)$/i.test(url)
 interface HkRoom {
   name: string
   room_number: string
-  housekeeping_status: "Clean" | "Dirty" | "Inspected" | "Ready" | "Out of Order"
+  housekeeping_status:
+    | "Clean"
+    | "Dirty"
+    | "Cleaning in Progress"
+    | "Inspected"
+    | "Ready"
+    | "Out of Order"
+    | "Maintenance"
   occupancy_status: "Vacant" | "Occupied"
   arrival_today: boolean
   vip?: number
@@ -60,12 +67,14 @@ interface HkRoom {
   departure_today?: number
 }
 
-const hkTone: Record<HkRoom["housekeeping_status"], string> = {
+const hkTone: Record<string, string> = {
   Clean: "border-emerald-300 bg-emerald-50 text-emerald-900",
   Ready: "border-emerald-400 bg-emerald-100 text-emerald-950",
   Inspected: "border-sky-300 bg-sky-50 text-sky-900",
   Dirty: "border-amber-300 bg-amber-50 text-amber-900",
+  "Cleaning in Progress": "border-blue-400 bg-blue-50 text-blue-900",
   "Out of Order": "border-rose-300 bg-rose-50 text-rose-900",
+  Maintenance: "border-purple-300 bg-purple-50 text-purple-900",
 }
 
 export default function HkApp() {
