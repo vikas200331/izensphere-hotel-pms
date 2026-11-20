@@ -174,12 +174,14 @@ export default function App() {
           path="book/:checkin/:checkout?/:adults?/:children?"
           element={<PublicBooking />}
         />
+        <Route path="stay" element={<Navigate to="/book" replace />} />
         <Route path="stay/:slug" element={<PublicListing />} />
         <Route
           path="stay/:slug/:checkin/:checkout?/:adults?/:children?"
           element={<PublicListing />}
         />
         {/* pre-arrival self check-in, tokenized per reservation */}
+        <Route path="checkin" element={<Navigate to="/in-house" replace />} />
         <Route path="checkin/:token" element={<PublicCheckin />} />
         {/* housekeeping phone app - share the /hk URL with the HK team */}
         <Route path="hk" element={<HkApp />} />
