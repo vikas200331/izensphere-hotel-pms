@@ -250,8 +250,10 @@ export default function App() {
           <Route path="end-of-day/pack/:audit" element={<AuditPack />} />
           <Route path="end-of-day/:property" element={<EndOfDayWizard />} />
           <Route path="night-audit" element={<Navigate to="/end-of-day" replace />} />
+          <Route path="eod" element={<Navigate to="/end-of-day" replace />} />
           <Route path="billing/:name" element={<FolioView />} />
           <Route path="cashier" element={<CashierTill />} />
+          <Route path="cashier/till" element={<CashierTill />} />
           <Route path="cashier/sessions" element={<CashierSessions />} />
           <Route path="finish-setup" element={<FinishSetup />} />
           <Route path="cashier/board" element={<CashierBoard />} />
@@ -260,12 +262,14 @@ export default function App() {
           <Route path="cashier/fx" element={<CurrencyDesk />} />
           <Route path="ledgers" element={<Ledgers />} />
           <Route path="receivables" element={<Receivables />} />
+          <Route path="city-ledger" element={<Navigate to="/receivables" replace />} />
           <Route path="receivables/:account" element={<Receivables />} />
           <Route path="folio-history" element={<FolioHistory />} />
           <Route
             path="companies"
             element={<ConfiguredScreen config="companiesConfig" />}
           />
+          <Route path="credit-control" element={<Navigate to="/companies" replace />} />
           <Route
             path="travel-agents"
             element={<ConfiguredScreen config="travelAgentsConfig" />}
@@ -298,6 +302,7 @@ export default function App() {
             path="lost-found"
             element={<ConfiguredScreen config="lostFoundConfig" />}
           />
+          <Route path="lost-and-found" element={<Navigate to="/lost-found" replace />} />
           <Route
             path="shifts"
             element={<ConfiguredScreen config="shiftsConfig" />}
@@ -319,10 +324,13 @@ export default function App() {
           <Route path="departures" element={<Navigate to="/in-house?tab=departures" replace />} />
           <Route path="voids-allowances" element={<VoidAllowanceReport />} />
           <Route path="allowances" element={<AllowanceApprovals />} />
+          <Route path="allowance-requests" element={<Navigate to="/allowances" replace />} />
           <Route path="allowance-voucher/:name" element={<AllowanceVoucher />} />
           <Route path="rate-calendar" element={<RateCalendar />} />
+          <Route path="hurdles" element={<Navigate to="/rate-calendar" replace />} />
           <Route path="revenue-reports" element={<RevenueReports />} />
           <Route path="ops-sla" element={<OpsSLA />} />
+          <Route path="sla" element={<Navigate to="/ops-sla" replace />} />
           <Route path="whatsapp" element={<WhatsAppChat />} />
           <Route
             path="channels"
@@ -344,10 +352,13 @@ export default function App() {
           <Route path="kitchen" element={<Kitchen />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="menu" element={<Navigate to="/menu-items" replace />} />
+          <Route path="pos/menu" element={<Navigate to="/menu-items" replace />} />
           <Route path="menu-items" element={<MenuItems />} />
           <Route path="ingredients" element={<ConfiguredScreen config="ingredientsConfig" />} />
+          <Route path="recipes" element={<Navigate to="/ingredients" replace />} />
           <Route path="printers" element={<KitchenPrinters />} />
           <Route path="outlets" element={<ConfiguredScreen config="outletsConfig" />} />
+          <Route path="pos/outlets" element={<Navigate to="/outlets" replace />} />
           <Route path="accounting-export" element={<AccountingExport />} />
           <Route path="payables" element={<Payables />} />
           <Route path="cash-forecast" element={<CashForecast />} />

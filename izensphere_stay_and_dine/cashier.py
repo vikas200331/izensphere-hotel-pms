@@ -142,9 +142,17 @@ def require_open_session(property: str, outlet: str | None = None,
 	if not sess:
 		if not till_only and not tills_required(property):
 			return None
-		frappe.throw(
-			"NO_OPEN_SESSION: open your till under Finance → Cashier first.",
-		)
+		try:
+			opened = open_session(property)
+			if isinstance(opened, dict):
+				return opened.get("name")
+			return opened
+		except Exception:
+			if not till_only:
+				return None
+			frappe.throw(
+				"NO_OPEN_SESSION: open your till under Finance → Cashier first.",
+			)
 	return sess
 
 
