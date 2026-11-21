@@ -404,6 +404,10 @@ export default function PublicListing() {
 
   async function submitBooking() {
     if (!booking || !resolved) return
+    if (auth.status !== "authed") {
+      setShowAuthModal(true)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -422,7 +426,11 @@ export default function PublicListing() {
       )
       setDone({ reservation: res.reservation, amount: res.amount_after_tax, status: res.status })
     } catch (e) {
-      setError(serverError(e))
+      const msg = serverError(e)
+      if (msg.includes("Login is required")) {
+        setShowAuthModal(true)
+      }
+      setError(msg)
     } finally {
       setBusy(false)
     }
@@ -958,10 +966,16 @@ export default function PublicListing() {
             ) : (
               <Button
                 className="w-full justify-center py-2.5 text-base"
-                disabled={busy || !form.guest_name || !form.phone}
-                onClick={submitBooking}
+                disabled={busy || (auth.status === "authed" && (!form.guest_name || !form.phone))}
+                onClick={() => {
+                  if (auth.status !== "authed") {
+                    setShowAuthModal(true)
+                  } else {
+                    submitBooking()
+                  }
+                }}
               >
-                {busy ? t("Booking…") : confirmLabel}
+                {busy ? t("Booking…") : auth.status !== "authed" ? t("Sign in to complete booking") : confirmLabel}
               </Button>
             )
           }
@@ -974,49 +988,77 @@ export default function PublicListing() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-zinc-600">
-                  {t("Full name")}
-                </span>
-                <input
-                  className={inputCls}
-                  value={form.guest_name}
-                  autoFocus
-                  onChange={(e) => setForm({ ...form, guest_name: e.target.value })}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-zinc-600">
-                  {t("Phone")}
-                </span>
-                <input
-                  className={inputCls}
-                  value={form.phone}
-                  placeholder="+…"
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                />
-              </label>
-              <label className="block sm:col-span-2">
-                <span className="mb-1.5 block text-sm font-medium text-zinc-600">
-                  {t("Email (optional)")}
-                </span>
-                <input
-                  className={inputCls}
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                />
-              </label>
-              <label className="flex items-start gap-2 text-sm text-zinc-600 sm:col-span-2">
-                <input type="checkbox" className="mt-0.5 size-4 accent-brand-600"
-                  checked={Boolean(form.marketing_consent)}
-                  onChange={(e) => setForm({ ...form, marketing_consent: e.target.checked ? 1 : 0 })} />
-                {t("Send me offers on WhatsApp. Reply STOP at any time to opt out.")}
-              </label>
-              {error && (
-                <p className="text-sm text-rose-600 sm:col-span-2">{translate(error)}</p>
+            <div className="space-y-4">
+              {auth.status !== "authed" && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900 flex items-center justify-between gap-3 shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <User className="size-4 shrink-0 text-emerald-700" />
+                    <span className="font-medium">{t("Please sign in or create an account to finalize your booking.")}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => setShowAuthModal(true)}
+                    className="shrink-0 bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3.5 py-1.5 rounded-lg font-semibold"
+                  >
+                    {t("Sign In / Register")}
+                  </Button>
+                </div>
               )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-zinc-600">
+                    {t("Full name")}
+                  </span>
+                  <input
+                    className={inputCls}
+                    value={form.guest_name}
+                    autoFocus
+                    onChange={(e) => setForm({ ...form, guest_name: e.target.value })}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-zinc-600">
+                    {t("Phone")}
+                  </span>
+                  <input
+                    className={inputCls}
+                    value={form.phone}
+                    placeholder="+…"
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="mb-1.5 block text-sm font-medium text-zinc-600">
+                    {t("Email (optional)")}
+                  </span>
+                  <input
+                    className={inputCls}
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  />
+                </label>
+                <label className="flex items-start gap-2 text-sm text-zinc-600 sm:col-span-2">
+                  <input type="checkbox" className="mt-0.5 size-4 accent-brand-600"
+                    checked={Boolean(form.marketing_consent)}
+                    onChange={(e) => setForm({ ...form, marketing_consent: e.target.checked ? 1 : 0 })} />
+                  {t("Send me offers on WhatsApp. Reply STOP at any time to opt out.")}
+                </label>
+                {error && (
+                  <div role="alert" className="sm:col-span-2 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700 flex items-center justify-between gap-3">
+                    <span>{translate(error)}</span>
+                    {error.includes("Login is required") && (
+                      <Button
+                        type="button"
+                        onClick={() => setShowAuthModal(true)}
+                        className="shrink-0 bg-rose-700 hover:bg-rose-800 text-white text-xs px-3 py-1.5 rounded-lg font-semibold"
+                      >
+                        {t("Sign In / Register")}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </Sheet>

@@ -786,6 +786,10 @@ export default function PublicBooking() {
 
   async function submitBooking() {
     if (!booking || !property || !selected) return
+    if (auth.status !== "authed") {
+      setShowAuthModal(true)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -823,7 +827,11 @@ export default function PublicBooking() {
         status: res.status,
       })
     } catch (e) {
-      setError(serverError(e))
+      const msg = serverError(e)
+      if (msg.includes("Login is required")) {
+        setShowAuthModal(true)
+      }
+      setError(msg)
     } finally {
       setBusy(false)
     }
@@ -1800,10 +1808,16 @@ export default function PublicBooking() {
                   retentionMonths={p.guest_retention_months} />
                 <Button
                   className="w-full justify-center py-2.5 text-base"
-                  disabled={busy || !form.guest_name.trim() || !form.phone.trim()}
-                  onClick={submitBooking}
+                  disabled={busy || (auth.status === "authed" && (!form.guest_name.trim() || !form.phone.trim()))}
+                  onClick={() => {
+                    if (auth.status !== "authed") {
+                      setShowAuthModal(true)
+                    } else {
+                      submitBooking()
+                    }
+                  }}
                 >
-                  {busy ? t("Booking…") : bookCta}
+                  {busy ? t("Booking…") : auth.status !== "authed" ? t("Sign in to complete booking") : bookCta}
                 </Button>
               </div>
             )
@@ -1851,6 +1865,22 @@ export default function PublicBooking() {
             </div>
           ) : (
             <div className="space-y-6">
+              {auth.status !== "authed" && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900 flex items-center justify-between gap-3 shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <User className="size-4 shrink-0 text-emerald-700" />
+                    <span className="font-medium">{t("Please sign in or create an account to finalize your booking.")}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => setShowAuthModal(true)}
+                    className="shrink-0 bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3.5 py-1.5 rounded-lg font-semibold"
+                  >
+                    {t("Sign In / Register")}
+                  </Button>
+                </div>
+              )}
+
               {/* what they are booking */}
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-zinc-50 p-4">
                 <div className="flex min-w-0 items-center gap-3">
@@ -1994,8 +2024,17 @@ export default function PublicBooking() {
               </div>
 
               {error && (
-                <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {translate(error)}
+                <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700 flex items-center justify-between gap-3">
+                  <span>{translate(error)}</span>
+                  {error.includes("Login is required") && (
+                    <Button
+                      type="button"
+                      onClick={() => setShowAuthModal(true)}
+                      className="shrink-0 bg-rose-700 hover:bg-rose-800 text-white text-xs px-3 py-1.5 rounded-lg font-semibold"
+                    >
+                      {t("Sign In / Register")}
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
