@@ -27,7 +27,7 @@ import {
   LogIn,
   LogOut,
 } from "lucide-react"
-import { callGuest, getDefaultProperty } from "../lib/api"
+import { call, callGuest, getDefaultProperty } from "../lib/api"
 import { useAuth } from "../lib/auth"
 import CustomerAuthModal from "../components/CustomerAuthModal"
 import { serverError } from "../lib/resource"
@@ -793,7 +793,7 @@ export default function PublicBooking() {
     setBusy(true)
     setError(null)
     try {
-      const res = await callGuest<{
+      const res = await call<{
         reservation: string
         precheckin_token?: string
         amount_after_tax: number
@@ -2044,6 +2044,7 @@ export default function PublicBooking() {
 
       <CustomerAuthModal
         isOpen={showAuthModal}
+        initialEmail={form.email}
         onClose={() => {
           setShowAuthModal(false)
           setPendingBookingRoom(null)

@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { X, Lock, Mail, User, Phone, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
-import { callGuest, login } from "../lib/api"
+import { call, login } from "../lib/api"
 import { useAuth } from "../lib/auth"
 import { useT } from "../lib/i18n"
 import { Button } from "./ui/button"
@@ -12,6 +12,7 @@ interface CustomerAuthModalProps {
   title?: string
   subtitle?: string
   initialTab?: "login" | "register"
+  initialEmail?: string
 }
 
 export default function CustomerAuthModal({
@@ -21,23 +22,31 @@ export default function CustomerAuthModal({
   title,
   subtitle,
   initialTab = "login",
+  initialEmail = "",
 }: CustomerAuthModalProps) {
   const { t } = useT()
   const auth = useAuth()
   const [tab, setTab] = useState<"login" | "register">(initialTab)
 
   // Login form state
-  const [loginEmail, setLoginEmail] = useState("")
+  const [loginEmail, setLoginEmail] = useState(initialEmail || "")
   const [loginPassword, setLoginPassword] = useState("")
 
   // Register form state
   const [regName, setRegName] = useState("")
-  const [regEmail, setRegEmail] = useState("")
+  const [regEmail, setRegEmail] = useState(initialEmail || "")
   const [regPhone, setRegPhone] = useState("")
   const [regPassword, setRegPassword] = useState("")
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (initialEmail && initialEmail.trim()) {
+      setLoginEmail(initialEmail.trim())
+      setRegEmail(initialEmail.trim())
+    }
+  }, [initialEmail, isOpen])
 
   if (!isOpen) return null
 
@@ -93,7 +102,7 @@ export default function CustomerAuthModal({
     setLoading(true)
     setError(null)
     try {
-      const res = await callGuest<{
+      const res = await call<{
         success: boolean
         user: string
         full_name: string
@@ -129,7 +138,7 @@ export default function CustomerAuthModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
@@ -193,9 +202,26 @@ export default function CustomerAuthModal({
         {/* Content Body */}
         <div className="p-6">
           {error && (
-            <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-              <AlertCircle className="size-4 shrink-0 mt-0.5 text-red-600" />
-              <div className="flex-1 font-medium">{error}</div>
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="size-4 shrink-0 mt-0.5 text-red-600" />
+                <div className="flex-1 font-medium">{error}</div>
+              </div>
+              {error.toLowerCase().includes("already exists") && (
+                <div className="mt-2 text-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTab("login")
+                      if (regEmail) setLoginEmail(regEmail)
+                      setError(null)
+                    }}
+                    className="inline-flex items-center gap-1 font-bold text-emerald-800 hover:underline"
+                  >
+                    {t("Switch to Sign In →")}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

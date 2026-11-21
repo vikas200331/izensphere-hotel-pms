@@ -13,7 +13,7 @@ import {
   LogIn,
   LogOut,
 } from "lucide-react"
-import { callGuest } from "../lib/api"
+import { call, callGuest } from "../lib/api"
 import { useAuth } from "../lib/auth"
 import CustomerAuthModal from "../components/CustomerAuthModal"
 import { serverError } from "../lib/resource"
@@ -411,7 +411,7 @@ export default function PublicListing() {
     setBusy(true)
     setError(null)
     try {
-      const res = await callGuest<{ reservation: string; amount_after_tax: number; status?: string }>("izensphere_stay_and_dine.public_api.book",
+      const res = await call<{ reservation: string; amount_after_tax: number; status?: string }>("izensphere_stay_and_dine.public_api.book",
         {
           property: resolved.property,
           room_type: booking,
@@ -1066,6 +1066,7 @@ export default function PublicListing() {
 
       <CustomerAuthModal
         isOpen={showAuthModal}
+        initialEmail={form.email}
         onClose={() => {
           setShowAuthModal(false)
           setPendingBookingRoom(null)

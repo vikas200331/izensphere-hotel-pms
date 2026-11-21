@@ -1032,63 +1032,80 @@ def book(property: str, room_type: str, check_in_date: str,
 	if not guest_name.strip() or not phone.strip():
 		frappe.throw("Name and phone are required.")
 
-	from izensphere_stay_and_dine.pricing import capacity_overflow
-
-	prop = frappe.get_cached_doc("Property", property)
-	rtd = frappe.get_cached_doc("Room Type", room_type)
-	adults, children, infants = _party(rtd, adults, children, _child_ages(child_ages))
-	above, beds = capacity_overflow(rtd, adults, children)
-	if above > beds:
-		frappe.throw(TOO_MANY_GUESTS)
-
-	# a guest may only add experiences the hotel actually publishes for this
-	# property - never a private, disabled or another property's experience,
-	# and always at the hotel's own price (qty is all the guest controls)
-	if isinstance(addons, str):
-		addons = frappe.parse_json(addons)
-	public_ids = set(frappe.get_all(
-		"Experience",
-		filters={"property": property, "disabled": 0, "show_on_booking_page": 1},
-		pluck="name",
-	))
-	safe_addons = [
-		{"experience": a["experience"], "qty": max(1, int(a.get("qty") or 1))}
-		for a in (addons or [])
-		if a.get("experience") in public_ids
-	]
-
-	from izensphere_stay_and_dine.api import create_booking
-	from izensphere_stay_and_dine.pricing import quote as price_quote
-	from izensphere_stay_and_dine.reservation_state import resolve_instant_status
-
-	mode = getattr(prop, "booking_mode", None) or "Instant"
-	hold_minutes = cint(getattr(prop, "hold_minutes", None) or 120)
-	key = (idempotency_key or "").strip() or None
-
-	# Peek at payment terms before insert so Instant can choose status.
-	q = price_quote(
-		property, room_type, check_in_date, check_out_date,
-		int(adults), int(children), meal_plan or None,
-		voucher_code=voucher_code or None, pets=int(pets or 0),
-	)
-	stay_rules = q.get("stay_rules") or {}
-	advance_due, policy = _advance_terms(
-		prop, float(q["amount_after_tax"] or 0), stay_rules)
-
-	status = None
-	hold_expires_on = None
-	assign_room = 1
-	if mode == "Request to Book" or above:
-		status = "Requested"
-		assign_room = 0
-	else:
-		status, hold_expires_on = resolve_instant_status(
-			advance_due=advance_due, hold_minutes=hold_minutes,
-		)
-
 	customer_user = frappe.session.user
 
 	with act_as(GUEST_AGENT):
+		if not frappe.db.exists("Property", property):
+			from izensphere_stay_and_dine.booking_slugs import property_for_slug
+			resolved_p = property_for_slug(property)
+			if resolved_p and frappe.db.exists("Property", resolved_p):
+				property = resolved_p
+
+		if not frappe.db.exists("Room Type", room_type):
+			resolved_rt = frappe.db.get_value(
+				"Room Type", {"listing_slug": room_type, "disabled": 0}, "name"
+			)
+			if not resolved_rt:
+				resolved_rt = frappe.db.get_value(
+					"Room Type", {"room_type_name": room_type, "disabled": 0}, "name"
+				)
+			if resolved_rt:
+				room_type = resolved_rt
+
+		from izensphere_stay_and_dine.pricing import capacity_overflow
+
+		prop = frappe.get_cached_doc("Property", property)
+		rtd = frappe.get_cached_doc("Room Type", room_type)
+		adults, children, infants = _party(rtd, adults, children, _child_ages(child_ages))
+		above, beds = capacity_overflow(rtd, adults, children)
+		if above > beds:
+			frappe.throw(TOO_MANY_GUESTS)
+
+		# a guest may only add experiences the hotel actually publishes for this
+		# property - never a private, disabled or another property's experience,
+		# and always at the hotel's own price (qty is all the guest controls)
+		if isinstance(addons, str):
+			addons = frappe.parse_json(addons)
+		public_ids = set(frappe.get_all(
+			"Experience",
+			filters={"property": property, "disabled": 0, "show_on_booking_page": 1},
+			pluck="name",
+		))
+		safe_addons = [
+			{"experience": a["experience"], "qty": max(1, int(a.get("qty") or 1))}
+			for a in (addons or [])
+			if a.get("experience") in public_ids
+		]
+
+		from izensphere_stay_and_dine.api import create_booking
+		from izensphere_stay_and_dine.pricing import quote as price_quote
+		from izensphere_stay_and_dine.reservation_state import resolve_instant_status
+
+		mode = getattr(prop, "booking_mode", None) or "Instant"
+		hold_minutes = cint(getattr(prop, "hold_minutes", None) or 120)
+		key = (idempotency_key or "").strip() or None
+
+		# Peek at payment terms before insert so Instant can choose status.
+		q = price_quote(
+			property, room_type, check_in_date, check_out_date,
+			int(adults), int(children), meal_plan or None,
+			voucher_code=voucher_code or None, pets=int(pets or 0),
+		)
+		stay_rules = q.get("stay_rules") or {}
+		advance_due, policy = _advance_terms(
+			prop, float(q["amount_after_tax"] or 0), stay_rules)
+
+		status = None
+		hold_expires_on = None
+		assign_room = 1
+		if mode == "Request to Book" or above:
+			status = "Requested"
+			assign_room = 0
+		else:
+			status, hold_expires_on = resolve_instant_status(
+				advance_due=advance_due, hold_minutes=hold_minutes,
+			)
+
 		result = create_booking(
 			property=property,
 			room_type=room_type,
