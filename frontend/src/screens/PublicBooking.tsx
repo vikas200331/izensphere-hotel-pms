@@ -38,6 +38,7 @@ import { useT, t as translate } from "../lib/i18n"
 import { adoptGuestLanguage } from "../lib/dir"
 import { LanguageSwitcher } from "../components/LanguageSwitcher"
 import { addDays, nightsBetween, parseDate, stayFromParams, todayPlus } from "../lib/stay"
+import { recordCustomerBooking } from "../lib/customerSession"
 import ChildAges, {
   agesToSend, canReserve, sizeAges, StayNotice,
   type ChildAge, type StayFit,
@@ -750,6 +751,7 @@ export default function PublicBooking() {
     try {
       const res = await callGuest<{
         reservation: string
+        precheckin_token?: string
         amount_after_tax: number
         advance_due: number
         balance_at_hotel: number
@@ -772,6 +774,7 @@ export default function PublicBooking() {
             .map(([experience, qty]) => ({ experience, qty })),
         },
       )
+      recordCustomerBooking(res.reservation, res.precheckin_token)
       setDone({
         reservation: res.reservation,
         amount: res.amount_after_tax,

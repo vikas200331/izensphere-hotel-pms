@@ -1049,8 +1049,10 @@ def book(property: str, room_type: str, check_in_date: str,
 
 	final_status = frappe.db.get_value(
 		"Reservation", result["reservation"], "status")
+	precheckin_token = frappe.db.get_value("Reservation", result["reservation"], "precheckin_token") or ""
 	return {
 		"reservation": result["reservation"],
+		"precheckin_token": precheckin_token,
 		"amount_after_tax": result["amount_after_tax"],
 		"advance_due": advance_due,
 		"balance_at_hotel": round(
@@ -1411,4 +1413,202 @@ def cancel_booking(reference: str = "", phone: str = "", token: str = "", reason
 		"cancellation_number": cancel_res.get("cancellation_number"),
 		"cancellation_fee": cancel_res.get("fee", 0.0),
 		"status": "Cancelled",
+	}
+
+
+@frappe.whitelist(allow_guest=True)
+@rate_limit(limit=30, seconds=300)
+def get_customer_booking_history(verified_tokens=None, verified_references=None):
+	"""Automatically retrieve all current and historical bookings for a verified customer.
+
+	Security & Data Isolation:
+	1. If frappe.session.user != "Guest":
+	   - Try to match authenticated user's email to tabGuest.email.
+	   - If matched, retrieve all reservations for that guest.
+	   - If user is internal staff without a guest profile, return empty list unless verified tokens provided.
+	2. If frappe.session.user == "Guest":
+	   - Parse verified_tokens or verified_references (passed from customer's client session).
+	   - For each valid token (length >= 20) or reference, look up the reservation and its guest ID.
+	   - Once the guest ID is resolved, expand to all reservations belonging to that guest.
+	3. If no verified session or authenticated identity is found:
+	   - Return {"found": False, "authenticated": False, "reason": "no_identity", "message": "No verified customer identity or active booking session found."}
+	   - Never display unverified bookings or expose other guests' data.
+	"""
+	from frappe.utils import today
+
+	if isinstance(verified_tokens, str):
+		try:
+			verified_tokens = frappe.parse_json(verified_tokens)
+		except Exception:
+			verified_tokens = [verified_tokens] if verified_tokens else []
+	elif not verified_tokens:
+		verified_tokens = []
+
+	if isinstance(verified_references, str):
+		try:
+			verified_references = frappe.parse_json(verified_references)
+		except Exception:
+			verified_references = [verified_references] if verified_references else []
+	elif not verified_references:
+		verified_references = []
+
+	guest_ids = set()
+	is_authed = frappe.session.user != "Guest"
+
+	# 1. If authenticated user, find Guest by email
+	if is_authed:
+		user_email = frappe.db.get_value("User", frappe.session.user, "email") or frappe.session.user
+		matching_guests = frappe.db.sql_list(
+			"SELECT name FROM `tabGuest` WHERE email = %(email)s",
+			{"email": user_email}
+		)
+		for gid in matching_guests:
+			guest_ids.add(gid)
+
+	# 2. Check tokens
+	for tok in verified_tokens:
+		tok_str = str(tok or "").strip()
+		if tok_str and len(tok_str) >= 20:
+			gid = frappe.db.get_value("Reservation", {"precheckin_token": tok_str}, "guest")
+			if gid:
+				guest_ids.add(gid)
+
+	# 3. Check references
+	for ref in verified_references:
+		ref_str = str(ref or "").strip()
+		if ref_str:
+			gid = (
+				frappe.db.get_value("Reservation", {"name": ref_str}, "guest")
+				or frappe.db.get_value("Reservation", {"ota_ref": ref_str}, "guest")
+				or frappe.db.get_value("Reservation", {"precheckin_token": ref_str}, "guest")
+			)
+			if gid:
+				guest_ids.add(gid)
+
+	if not guest_ids:
+		return {
+			"found": False,
+			"authenticated": is_authed,
+			"reason": "no_identity",
+			"message": "No verified customer identity or active booking session found.",
+			"bookings": [],
+			"categories": {"upcoming": [], "current": [], "completed": [], "cancelled": []},
+			"counts": {"all": 0, "upcoming": 0, "current": 0, "completed": 0, "cancelled": 0},
+		}
+
+	# Retrieve all reservations for the resolved guest(s)
+	res_names = frappe.db.sql_list(
+		"""SELECT name FROM `tabReservation`
+		   WHERE guest IN %(guests)s
+		   ORDER BY check_in_date DESC""",
+		{"guests": tuple(guest_ids)}
+	)
+
+	t_today = today()
+	bookings = []
+	categories = {
+		"upcoming": [],
+		"current": [],
+		"completed": [],
+		"cancelled": []
+	}
+
+	for rname in res_names:
+		res = frappe.get_doc("Reservation", rname)
+		prop = frappe.get_cached_doc("Property", res.property)
+		guest_doc = frappe.get_cached_doc("Guest", res.guest)
+
+		folio_info = frappe.db.get_value(
+			"Folio", {"reservation": res.name},
+			["name", "grand_total", "payments_total", "balance", "status"],
+			as_dict=True
+		)
+
+		grand_total = float(folio_info.grand_total if folio_info else (res.amount_after_tax or 0.0))
+		paid = float(folio_info.payments_total if folio_info else 0.0)
+		balance = float(folio_info.balance if folio_info else max(0.0, grand_total - paid))
+
+		rt_name = res.room_type
+		if "-" in rt_name:
+			rt_name = rt_name.split("-", 1)[1]
+
+		room_num = ""
+		if res.room:
+			room_num = frappe.db.get_value("Room", res.room, "room_number") or res.room
+
+		meal_plan_label = "Room only"
+		if res.meal_plan:
+			meal_plan_label = frappe.db.get_value("Meal Plan", res.meal_plan, "label") or res.meal_plan
+
+		payment_status = "Paid" if balance <= 0.001 else ("Partially Paid" if paid > 0 else "Unpaid")
+
+		cin = str(res.check_in_date)
+		cout = str(res.check_out_date)
+		st = res.status
+
+		# Categorize
+		if st == "Cancelled":
+			category = "cancelled"
+		elif st == "Checked In" or (cin <= t_today <= cout and st != "Checked Out"):
+			category = "current"
+		elif cin > t_today and st in ("Confirmed", "Draft", "Pending Payment", "Requested"):
+			category = "upcoming"
+		else:
+			category = "completed"
+
+		b_item = {
+			"reservation": res.name,
+			"property": prop.property_name,
+			"property_name": prop.property_name,
+			"property_slug": prop.name.lower().replace(" ", "-"),
+			"city": prop.city or "",
+			"phone": prop.phone or "",
+			"wifi_ssid": prop.get("wifi_ssid") or "",
+			"wifi_password": prop.get("wifi_password") or "",
+			"checkin_time": str(prop.checkin_time or "14:00"),
+			"checkout_time": str(prop.checkout_time or "11:00"),
+			"guest_name": guest_doc.full_name or guest_doc.first_name or "Guest",
+			"guest_phone": guest_doc.phone or "",
+			"guest_email": guest_doc.email or "",
+			"room_type": rt_name,
+			"room": res.room or "",
+			"room_number": room_num,
+			"check_in_date": cin,
+			"check_out_date": cout,
+			"nights": int(res.nights or 1),
+			"adults": int(res.adults or 1),
+			"children": int(res.children or 0),
+			"meal_plan": res.meal_plan or "",
+			"meal_plan_name": meal_plan_label,
+			"status": st,
+			"payment_status": payment_status,
+			"category": category,
+			"precheckin_status": res.precheckin_status or "Pending",
+			"precheckin_token": res.precheckin_token or "",
+			"cancellation_number": res.cancellation_number or "",
+			"cancellation_reason": res.cancellation_reason or "",
+			"special_requests": res.special_requests or "",
+			"created_at": str(res.creation),
+			"grand_total": grand_total,
+			"paid_amount": paid,
+			"balance": balance,
+			"currency_symbol": "₹",
+		}
+
+		bookings.append(b_item)
+		categories[category].append(b_item)
+
+	return {
+		"found": True,
+		"authenticated": is_authed,
+		"guest_name": bookings[0]["guest_name"] if bookings else "Guest",
+		"bookings": bookings,
+		"categories": categories,
+		"counts": {
+			"all": len(bookings),
+			"upcoming": len(categories["upcoming"]),
+			"current": len(categories["current"]),
+			"completed": len(categories["completed"]),
+			"cancelled": len(categories["cancelled"]),
+		},
 	}
