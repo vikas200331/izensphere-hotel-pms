@@ -21,14 +21,17 @@ import {
   ChevronUp,
   Layers,
   History,
+  User,
+  LogIn,
+  LogOut,
 } from "lucide-react"
 import { call } from "../lib/api"
+import { useAuth } from "../lib/auth"
+import CustomerAuthModal from "../components/CustomerAuthModal"
 import { Button } from "../components/ui/button"
 import { useT } from "../lib/i18n"
 import { moneyLocale } from "../lib/money"
 import {
-  getVerifiedTokens,
-  getVerifiedReferences,
   recordCustomerBooking,
 } from "../lib/customerSession"
 
@@ -147,14 +150,17 @@ export default function GuestPortal() {
   const [cxlSubmitting, setCxlSubmitting] = useState(false)
   const [cxlError, setCxlError] = useState<string | null>(null)
 
-  // Manual link helper (fallback for switching devices)
-  const [showLinkHelper, setShowLinkHelper] = useState(false)
-  const [linkRef, setLinkRef] = useState("")
-  const [linkPhone, setLinkPhone] = useState("")
-  const [linkLoading, setLinkLoading] = useState(false)
-  const [linkError, setLinkError] = useState<string | null>(null)
+  const auth = useAuth()
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   const loadBookingHistory = useCallback(async (isRefresh = false) => {
+    if (auth.status === "loading") return
+    if (auth.status === "anon") {
+      setLoading(false)
+      setBookings([])
+      return
+    }
+
     if (isRefresh) {
       setRefreshing(true)
     } else {
@@ -167,16 +173,10 @@ export default function GuestPortal() {
       recordCustomerBooking(urlRef, urlToken)
     }
 
-    const tokens = getVerifiedTokens()
-    const refs = getVerifiedReferences()
-
     try {
       const res = await call<HistoryResponse>(
         "izensphere_stay_and_dine.public_api.get_customer_booking_history",
-        {
-          verified_tokens: tokens,
-          verified_references: refs,
-        },
+        {},
       )
 
       if (res.found && res.bookings.length > 0) {
@@ -184,18 +184,11 @@ export default function GuestPortal() {
         setCategories(res.categories)
         setCounts(res.counts)
         if (res.guest_name) setGuestName(res.guest_name)
-
-        // Automatically persist any tokens returned for all bookings of this guest
-        for (const b of res.bookings) {
-          if (b.reservation) {
-            recordCustomerBooking(b.reservation, b.precheckin_token)
-          }
-        }
       } else {
         setBookings([])
         setCategories({ upcoming: [], current: [], completed: [], cancelled: [] })
         setCounts({ all: 0, upcoming: 0, current: 0, completed: 0, cancelled: 0 })
-        if (res.message && res.reason !== "no_identity") {
+        if (res.message && res.reason !== "no_bookings") {
           setError(res.message)
         }
       }
@@ -205,7 +198,7 @@ export default function GuestPortal() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [t, urlRef, urlToken])
+  }, [t, auth.status, urlRef, urlToken])
 
   useEffect(() => {
     loadBookingHistory()
@@ -216,41 +209,6 @@ export default function GuestPortal() {
       ...prev,
       [resName]: !prev[resName],
     }))
-  }
-
-  const handleLinkExisting = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!linkRef.trim() || !linkPhone.trim()) {
-      setLinkError(t("Please enter both Booking Reference and Phone Number."))
-      return
-    }
-    setLinkLoading(true)
-    setLinkError(null)
-    try {
-      const res = await call<{ found: boolean; bookings: BookingSummary[] }>(
-        "izensphere_stay_and_dine.public_api.lookup_booking",
-        {
-          reference: linkRef.trim(),
-          phone: linkPhone.trim(),
-        },
-      )
-      if (res.found && res.bookings.length > 0) {
-        for (const b of res.bookings) {
-          recordCustomerBooking(b.reservation, b.precheckin_token)
-        }
-        setSuccessMsg(t("Booking linked successfully to your device history!"))
-        setShowLinkHelper(false)
-        setLinkRef("")
-        setLinkPhone("")
-        loadBookingHistory(true)
-      } else {
-        setLinkError(t("No reservations found matching this reference and phone number."))
-      }
-    } catch (err: unknown) {
-      setLinkError((err as Error).message || t("Verification failed."))
-    } finally {
-      setLinkLoading(false)
-    }
   }
 
   const handleModificationSubmit = async (e: React.FormEvent) => {
@@ -371,6 +329,24 @@ export default function GuestPortal() {
                 {t("Book a Stay")}
               </Button>
             </Link>
+            {auth.status === "authed" ? (
+              <Button
+                variant="outline"
+                onClick={() => auth.signOut()}
+                className="text-xs sm:text-sm text-zinc-600 hover:text-zinc-900"
+              >
+                <LogOut className="size-3.5 mr-1.5" />
+                {t("Sign out")}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => setShowAuthModal(true)}
+                className="text-xs sm:text-sm bg-emerald-700 hover:bg-emerald-800 text-white"
+              >
+                <LogIn className="size-3.5 mr-1.5" />
+                {t("Sign In")}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -436,51 +412,46 @@ export default function GuestPortal() {
           <div className="mt-6 flex flex-wrap gap-2 border-b border-zinc-200 pb-3">
             <button
               onClick={() => setActiveTab("all")}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                activeTab === "all"
-                  ? "bg-zinc-900 text-white shadow-sm"
-                  : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
-              }`}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${activeTab === "all"
+                ? "bg-zinc-900 text-white shadow-sm"
+                : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+                }`}
             >
               {t("All Bookings")} ({counts.all})
             </button>
             <button
               onClick={() => setActiveTab("upcoming")}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                activeTab === "upcoming"
-                  ? "bg-zinc-900 text-white shadow-sm"
-                  : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
-              }`}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${activeTab === "upcoming"
+                ? "bg-zinc-900 text-white shadow-sm"
+                : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+                }`}
             >
               {t("Upcoming")} ({counts.upcoming})
             </button>
             <button
               onClick={() => setActiveTab("current")}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                activeTab === "current"
-                  ? "bg-zinc-900 text-white shadow-sm"
-                  : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
-              }`}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${activeTab === "current"
+                ? "bg-zinc-900 text-white shadow-sm"
+                : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+                }`}
             >
               {t("Current Stays")} ({counts.current})
             </button>
             <button
               onClick={() => setActiveTab("completed")}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                activeTab === "completed"
-                  ? "bg-zinc-900 text-white shadow-sm"
-                  : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
-              }`}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${activeTab === "completed"
+                ? "bg-zinc-900 text-white shadow-sm"
+                : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+                }`}
             >
               {t("Completed")} ({counts.completed})
             </button>
             <button
               onClick={() => setActiveTab("cancelled")}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                activeTab === "cancelled"
-                  ? "bg-zinc-900 text-white shadow-sm"
-                  : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
-              }`}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${activeTab === "cancelled"
+                ? "bg-zinc-900 text-white shadow-sm"
+                : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+                }`}
             >
               {t("Cancelled")} ({counts.cancelled})
             </button>
@@ -497,76 +468,54 @@ export default function GuestPortal() {
           </div>
         )}
 
-        {/* Empty State when No Bookings Found on Device */}
-        {!loading && bookings.length === 0 && (
+        {/* Unauthenticated State */}
+        {!loading && auth.status === "anon" && (
+          <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-8 sm:p-10 text-center shadow-sm">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+              <User className="size-7" />
+            </div>
+            <h3 className="mt-4 text-xl font-bold text-zinc-900">
+              {t("Sign In to View Your Bookings")}
+            </h3>
+            <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500 leading-relaxed">
+              {t("Sign in or create an account to view your past and upcoming reservations, download booking vouchers, and access online check-in.")}
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Button
+                onClick={() => setShowAuthModal(true)}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2.5 text-sm font-semibold rounded-xl"
+              >
+                <LogIn className="size-4 mr-2" />
+                {t("Sign In / Create Account")}
+              </Button>
+              <Link to="/book">
+                <Button variant="outline" className="px-5 py-2.5 text-sm rounded-xl">
+                  {t("Browse & Book Rooms")}
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State when Authenticated but No Bookings Found */}
+        {!loading && auth.status === "authed" && bookings.length === 0 && (
           <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
             <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-zinc-100">
               <History className="size-7 text-zinc-400" />
             </div>
             <h3 className="mt-4 text-lg font-bold text-zinc-900">
-              {t("No Booking History Found")}
+              {t("No Bookings Found")}
             </h3>
             <p className="mx-auto mt-1 max-w-md text-xs text-zinc-500 leading-relaxed">
-              {t("Reservations created on this browser automatically appear in your booking history. When you book a room, your stay is stored securely here.")}
+              {t("You don't have any reservations linked to your account yet. When you book a room, your stay will appear here automatically.")}
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <div className="mt-6 flex justify-center">
               <Link to="/book">
-                <Button className="px-5 py-2 text-sm">
+                <Button className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2.5 text-sm font-semibold rounded-xl">
                   {t("Book a Stay Now")}
                 </Button>
               </Link>
-              <Button
-                variant="outline"
-                onClick={() => setShowLinkHelper((prev) => !prev)}
-                className="px-4 py-2 text-xs"
-              >
-                {showLinkHelper ? t("Hide Link Option") : t("Link an Existing Booking")}
-              </Button>
             </div>
-
-            {/* Collapsible Link Existing Reservation Helper */}
-            {showLinkHelper && (
-              <div className="mx-auto mt-6 max-w-md rounded-xl border border-zinc-200 bg-zinc-50 p-5 text-start">
-                <h4 className="text-xs font-bold text-zinc-900">
-                  {t("Link a Booking from Another Device")}
-                </h4>
-                <p className="text-[11px] text-zinc-500 mt-0.5">
-                  {t("Enter your booking number and registered mobile to add this stay to your device history.")}
-                </p>
-                <form onSubmit={handleLinkExisting} className="mt-3 space-y-3">
-                  <div>
-                    <input
-                      type="text"
-                      placeholder={t("Booking Reference (e.g. RES-2026-00030)")}
-                      value={linkRef}
-                      onChange={(e) => setLinkRef(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:border-brand-600"
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="tel"
-                      placeholder={t("Registered Mobile Number")}
-                      value={linkPhone}
-                      onChange={(e) => setLinkPhone(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:border-brand-600"
-                    />
-                  </div>
-                  {linkError && (
-                    <p className="text-xs text-rose-600 font-medium">{linkError}</p>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="submit"
-                      disabled={linkLoading || !linkRef.trim() || !linkPhone.trim()}
-                      className="px-4 py-1.5 text-xs font-semibold"
-                    >
-                      {linkLoading ? t("Verifying…") : t("Link to History")}
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            )}
           </div>
         )}
 
@@ -1164,6 +1113,17 @@ export default function GuestPortal() {
           </div>
         </div>
       )}
+
+      <CustomerAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => {
+          setShowAuthModal(false)
+          loadBookingHistory(true)
+        }}
+        title={t("Customer Account")}
+        subtitle={t("Sign in or create an account to view your bookings.")}
+      />
     </div>
   )
 }

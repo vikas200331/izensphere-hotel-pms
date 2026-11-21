@@ -911,6 +911,100 @@ def _payment_split(prop, total: float, rules: dict | None = None) -> dict:
 	}
 
 
+@frappe.whitelist(allow_guest=True)
+def customer_register(full_name: str, email: str, password: str, phone: str = ""):
+	"""Register a new customer account, create or link Guest/Customer records,
+	and authenticate the session.
+	"""
+	email = (email or "").strip().lower()
+	full_name = (full_name or "").strip()
+	phone = (phone or "").strip()
+	password = (password or "").strip()
+
+	if not email or "@" not in email:
+		frappe.throw("A valid email address is required.")
+	if not full_name:
+		frappe.throw("Full name is required.")
+	if len(password) < 6:
+		frappe.throw("Password must be at least 6 characters.")
+	if frappe.db.exists("User", email):
+		frappe.throw("An account with this email already exists. Please sign in.")
+
+	parts = full_name.split(" ", 1)
+	first_name = parts[0]
+	last_name = parts[1] if len(parts) > 1 else ""
+
+	user = frappe.get_doc({
+		"doctype": "User",
+		"email": email,
+		"first_name": first_name,
+		"last_name": last_name,
+		"full_name": full_name,
+		"phone": phone,
+		"enabled": 1,
+		"new_password": password,
+		"user_type": "Website User",
+		"send_welcome_email": 0,
+		"roles": [{"doctype": "Has Role", "role": "Customer"}],
+	})
+	user.flags.ignore_password_policy = True
+	user.insert(ignore_permissions=True)
+
+	# Create or link Guest
+	guest_name = frappe.db.get_value("Guest", {"email": email})
+	if not guest_name and phone:
+		guest_name = frappe.db.get_value("Guest", {"phone": phone})
+	if not guest_name:
+		guest = frappe.get_doc({
+			"doctype": "Guest",
+			"first_name": first_name,
+			"last_name": last_name,
+			"full_name": full_name,
+			"email": email,
+			"phone": phone,
+		}).insert(ignore_permissions=True)
+		guest_name = guest.name
+	else:
+		frappe.db.set_value("Guest", guest_name, {
+			"full_name": full_name,
+			"email": email,
+			"phone": phone or frappe.db.get_value("Guest", guest_name, "phone"),
+		})
+
+	# If ERPNext Customer exists, ensure Customer record exists
+	if frappe.db.exists("DocType", "Customer"):
+		cust_name = frappe.db.get_value("Customer", {"email_id": email})
+		if not cust_name:
+			try:
+				frappe.get_doc({
+					"doctype": "Customer",
+					"customer_name": full_name,
+					"customer_type": "Individual",
+					"email_id": email,
+					"mobile_no": phone,
+				}).insert(ignore_permissions=True)
+			except Exception:
+				pass
+
+	frappe.db.commit()
+
+	if getattr(frappe.local, "request", None):
+		try:
+			from frappe.auth import LoginManager
+			login_manager = LoginManager()
+			login_manager.login_as(user.name)
+		except Exception:
+			pass
+
+	return {
+		"success": True,
+		"user": user.name,
+		"full_name": full_name,
+		"email": email,
+		"phone": phone,
+	}
+
+
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 @rate_limit(limit=10, seconds=3600)
 def book(property: str, room_type: str, check_in_date: str,
@@ -929,6 +1023,12 @@ def book(property: str, room_type: str, check_in_date: str,
 	within the extra guests it allows, is also Requested: the host confirms
 	the sleeping arrangement and agrees the price for them.
 	"""
+	if frappe.session.user == "Guest":
+		frappe.throw(
+			"Login is required to complete a booking. Please sign in or create an account.",
+			frappe.PermissionError,
+		)
+
 	if not guest_name.strip() or not phone.strip():
 		frappe.throw("Name and phone are required.")
 
@@ -986,6 +1086,8 @@ def book(property: str, room_type: str, check_in_date: str,
 			advance_due=advance_due, hold_minutes=hold_minutes,
 		)
 
+	customer_user = frappe.session.user
+
 	with act_as(GUEST_AGENT):
 		result = create_booking(
 			property=property,
@@ -1039,8 +1141,24 @@ def book(property: str, room_type: str, check_in_date: str,
 			finally:
 				frappe.flags.kamra_status_transition = False
 		frappe.db.set_value("Reservation", result["reservation"], updates)
-		if email:
-			frappe.db.set_value("Guest", result["guest"], "email", email)
+		frappe.db.set_value("Reservation", result["reservation"], "owner", customer_user)
+		user_email = frappe.db.get_value("User", customer_user, "email") or customer_user
+		effective_email = email or user_email
+		if effective_email:
+			frappe.db.set_value("Guest", result["guest"], "email", effective_email)
+		if frappe.db.exists("DocType", "Customer"):
+			cust_name = frappe.db.get_value("Customer", {"email_id": effective_email})
+			if not cust_name and guest_name:
+				try:
+					frappe.get_doc({
+						"doctype": "Customer",
+						"customer_name": guest_name,
+						"customer_type": "Individual",
+						"email_id": effective_email,
+						"mobile_no": phone,
+					}).insert(ignore_permissions=True)
+				except Exception:
+					pass
 		if cint(marketing_consent):
 			# the guest ticked the (unticked by default) offers box
 			from izensphere_stay_and_dine.privacy import set_marketing_consent
@@ -1316,8 +1434,9 @@ def _verify_guest_reservation(reference: str = "", phone: str = "", token: str =
 		r in ("Front Desk", "Hotel Admin", "System Manager", "Administrator", "Kamra Agent")
 		for r in frappe.get_roles()
 	)
+	is_authed_customer = frappe.session.user != "Guest" and not is_staff
 
-	if not is_staff:
+	if not is_staff and not is_authed_customer:
 		if tok:
 			if len(tok) < 20:
 				frappe.throw("Invalid booking token.")
@@ -1343,7 +1462,12 @@ def _verify_guest_reservation(reference: str = "", phone: str = "", token: str =
 	res = frappe.get_doc("Reservation", res_name)
 	guest_doc = frappe.get_cached_doc("Guest", res.guest)
 
-	if not is_staff and not tok:
+	if is_authed_customer:
+		# Enforce strict customer ownership check
+		user_email = frappe.db.get_value("User", frappe.session.user, "email") or frappe.session.user
+		if res.owner != frappe.session.user and guest_doc.email != user_email and guest_doc.email != frappe.session.user:
+			frappe.throw("You do not have permission to access or modify this reservation.", frappe.PermissionError)
+	elif not is_staff and not tok:
 		input_digits = _digits(ph)
 		stored_digits = _digits(guest_doc.phone)
 		match = False
@@ -1419,89 +1543,67 @@ def cancel_booking(reference: str = "", phone: str = "", token: str = "", reason
 @frappe.whitelist(allow_guest=True)
 @rate_limit(limit=30, seconds=300)
 def get_customer_booking_history(verified_tokens=None, verified_references=None):
-	"""Automatically retrieve all current and historical bookings for a verified customer.
+	"""Automatically retrieve all current and historical bookings for an authenticated customer.
 
-	Security & Data Isolation:
-	1. If frappe.session.user != "Guest":
-	   - Try to match authenticated user's email to tabGuest.email.
-	   - If matched, retrieve all reservations for that guest.
-	   - If user is internal staff without a guest profile, return empty list unless verified tokens provided.
-	2. If frappe.session.user == "Guest":
-	   - Parse verified_tokens or verified_references (passed from customer's client session).
-	   - For each valid token (length >= 20) or reference, look up the reservation and its guest ID.
-	   - Once the guest ID is resolved, expand to all reservations belonging to that guest.
-	3. If no verified session or authenticated identity is found:
-	   - Return {"found": False, "authenticated": False, "reason": "no_identity", "message": "No verified customer identity or active booking session found."}
-	   - Never display unverified bookings or expose other guests' data.
+	Security & Ownership:
+	- If unauthenticated (Guest), returns login_required status.
+	- If authenticated, queries reservations where owner == frappe.session.user
+	  OR guest is linked to the user's email/phone.
+	- Never exposes other customers' bookings or trusts client-supplied IDs.
 	"""
 	from frappe.utils import today
 
-	if isinstance(verified_tokens, str):
-		try:
-			verified_tokens = frappe.parse_json(verified_tokens)
-		except Exception:
-			verified_tokens = [verified_tokens] if verified_tokens else []
-	elif not verified_tokens:
-		verified_tokens = []
-
-	if isinstance(verified_references, str):
-		try:
-			verified_references = frappe.parse_json(verified_references)
-		except Exception:
-			verified_references = [verified_references] if verified_references else []
-	elif not verified_references:
-		verified_references = []
-
-	guest_ids = set()
-	is_authed = frappe.session.user != "Guest"
-
-	# 1. If authenticated user, find Guest by email
-	if is_authed:
-		user_email = frappe.db.get_value("User", frappe.session.user, "email") or frappe.session.user
-		matching_guests = frappe.db.sql_list(
-			"SELECT name FROM `tabGuest` WHERE email = %(email)s",
-			{"email": user_email}
-		)
-		for gid in matching_guests:
-			guest_ids.add(gid)
-
-	# 2. Check tokens
-	for tok in verified_tokens:
-		tok_str = str(tok or "").strip()
-		if tok_str and len(tok_str) >= 20:
-			gid = frappe.db.get_value("Reservation", {"precheckin_token": tok_str}, "guest")
-			if gid:
-				guest_ids.add(gid)
-
-	# 3. Check references
-	for ref in verified_references:
-		ref_str = str(ref or "").strip()
-		if ref_str:
-			gid = (
-				frappe.db.get_value("Reservation", {"name": ref_str}, "guest")
-				or frappe.db.get_value("Reservation", {"ota_ref": ref_str}, "guest")
-				or frappe.db.get_value("Reservation", {"precheckin_token": ref_str}, "guest")
-			)
-			if gid:
-				guest_ids.add(gid)
-
-	if not guest_ids:
+	if frappe.session.user == "Guest":
 		return {
 			"found": False,
-			"authenticated": is_authed,
-			"reason": "no_identity",
-			"message": "No verified customer identity or active booking session found.",
+			"authenticated": False,
+			"reason": "login_required",
+			"message": "Please sign in to view your bookings.",
 			"bookings": [],
 			"categories": {"upcoming": [], "current": [], "completed": [], "cancelled": []},
 			"counts": {"all": 0, "upcoming": 0, "current": 0, "completed": 0, "cancelled": 0},
 		}
 
-	# Retrieve all reservations for the resolved guest(s)
+	user = frappe.session.user
+	user_email = frappe.db.get_value("User", user, "email") or user
+	user_phone = frappe.db.get_value("User", user, "phone") or ""
+
+	guest_ids = set()
+	if user_email:
+		for gid in frappe.db.sql_list("SELECT name FROM `tabGuest` WHERE email = %(email)s", {"email": user_email}):
+			guest_ids.add(gid)
+	if user_phone:
+		for gid in frappe.db.sql_list("SELECT name FROM `tabGuest` WHERE phone = %(phone)s", {"phone": user_phone}):
+			guest_ids.add(gid)
+
+	# Direct reservations created by or owned by this user
+	res_by_owner = set(frappe.db.sql_list("SELECT name FROM `tabReservation` WHERE owner = %(user)s", {"user": user}))
+	# Reservations linked to user's guest profile
+	res_by_guest = set()
+	if guest_ids:
+		res_by_guest = set(frappe.db.sql_list(
+			"SELECT name FROM `tabReservation` WHERE guest IN %(guests)s",
+			{"guests": tuple(guest_ids)}
+		))
+
+	all_res_names = res_by_owner | res_by_guest
+	if not all_res_names:
+		return {
+			"found": False,
+			"authenticated": True,
+			"reason": "no_bookings",
+			"message": "You do not have any bookings yet.",
+			"bookings": [],
+			"categories": {"upcoming": [], "current": [], "completed": [], "cancelled": []},
+			"counts": {"all": 0, "upcoming": 0, "current": 0, "completed": 0, "cancelled": 0},
+		}
+
+	# Retrieve all reservations for the customer ordered by check_in_date DESC
 	res_names = frappe.db.sql_list(
 		"""SELECT name FROM `tabReservation`
-		   WHERE guest IN %(guests)s
+		   WHERE name IN %(names)s
 		   ORDER BY check_in_date DESC""",
-		{"guests": tuple(guest_ids)}
+		{"names": tuple(all_res_names)}
 	)
 
 	t_today = today()
@@ -1515,6 +1617,8 @@ def get_customer_booking_history(verified_tokens=None, verified_references=None)
 
 	for rname in res_names:
 		res = frappe.get_doc("Reservation", rname)
+		if not res.guest or not frappe.db.exists("Guest", res.guest):
+			continue
 		prop = frappe.get_cached_doc("Property", res.property)
 		guest_doc = frappe.get_cached_doc("Guest", res.guest)
 
@@ -1600,7 +1704,7 @@ def get_customer_booking_history(verified_tokens=None, verified_references=None)
 
 	return {
 		"found": True,
-		"authenticated": is_authed,
+		"authenticated": True,
 		"guest_name": bookings[0]["guest_name"] if bookings else "Guest",
 		"bookings": bookings,
 		"categories": categories,

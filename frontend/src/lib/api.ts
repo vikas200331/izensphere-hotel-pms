@@ -240,6 +240,8 @@ export async function callGuest<T = unknown>(
 export interface WhoAmI {
   user: string
   full_name: string
+  email?: string
+  phone?: string
   roles: string[]
 }
 

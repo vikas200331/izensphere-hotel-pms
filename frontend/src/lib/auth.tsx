@@ -19,6 +19,10 @@ type Status = "loading" | "anon" | "authed"
 interface AuthValue {
   status: Status
   user: string | null
+  userId?: string | null
+  fullName?: string | null
+  email?: string | null
+  phone?: string | null
   roles: string[]
   refresh: () => Promise<void>
   signOut: () => Promise<void>
@@ -35,6 +39,10 @@ export function useAuth(): AuthValue {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading")
   const [user, setUser] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [fullName, setFullName] = useState<string | null>(null)
+  const [email, setEmail] = useState<string | null>(null)
+  const [phone, setPhone] = useState<string | null>(null)
   const [roles, setRoles] = useState<string[]>([])
   const navigate = useNavigate()
   const statusRef = useRef<Status>("loading")
@@ -50,10 +58,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           sessionStorage.setItem("kamra_session_ended", "1")
         setStatus("anon")
         setUser(null)
+        setUserId(null)
+        setFullName(null)
+        setEmail(null)
+        setPhone(null)
         setRoles([])
       } else {
         setStatus("authed")
         setUser(w.full_name || w.user)
+        setUserId(w.user)
+        setFullName(w.full_name || w.user)
+        setEmail(w.email || (w.user.includes("@") ? w.user : null))
+        setPhone(w.phone || null)
         setRoles(w.roles)
       }
     } catch (e) {
@@ -67,6 +83,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sessionStorage.setItem("kamra_session_ended", "1")
       setStatus("anon")
       setUser(null)
+      setUserId(null)
+      setFullName(null)
+      setEmail(null)
+      setPhone(null)
       setRoles([])
     }
   }, [])
@@ -92,12 +112,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await logout().catch(() => undefined)
     setStatus("anon")
     setUser(null)
+    setUserId(null)
+    setFullName(null)
+    setEmail(null)
+    setPhone(null)
     setRoles([])
     navigate("/login", { replace: true })
   }, [navigate])
 
   return (
-    <AuthCtx.Provider value={{ status, user, roles, refresh, signOut }}>
+    <AuthCtx.Provider value={{ status, user, userId, fullName, email, phone, roles, refresh, signOut }}>
       {children}
     </AuthCtx.Provider>
   )

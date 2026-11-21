@@ -24,8 +24,12 @@ import {
   Wallet,
   X,
   Zap,
+  LogIn,
+  LogOut,
 } from "lucide-react"
 import { callGuest, getDefaultProperty } from "../lib/api"
+import { useAuth } from "../lib/auth"
+import CustomerAuthModal from "../components/CustomerAuthModal"
 import { serverError } from "../lib/resource"
 import { accentVars } from "../lib/accents"
 import { Badge } from "../components/ui/badge"
@@ -554,6 +558,42 @@ export default function PublicBooking() {
   const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState(false)
 
+  const auth = useAuth()
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [pendingBookingRoom, setPendingBookingRoom] = useState<string | null>(null)
+
+  const handleStartBooking = (roomTypeName: string) => {
+    if (auth.status === "authed") {
+      setForm((f) => ({
+        ...f,
+        guest_name: f.guest_name || auth.fullName || auth.user || "",
+        email: f.email || auth.email || "",
+        phone: f.phone || auth.phone || "",
+      }))
+      setBooking(roomTypeName)
+    } else {
+      setPendingBookingRoom(roomTypeName)
+      setShowAuthModal(true)
+    }
+  }
+
+  const handleAuthSuccess = (userData?: { user: string; fullName: string; email: string; phone: string }) => {
+    setShowAuthModal(false)
+    if (userData) {
+      setForm((f) => ({
+        ...f,
+        guest_name: f.guest_name || userData.fullName || userData.user || "",
+        email: f.email || userData.email || "",
+        phone: f.phone || userData.phone || "",
+      }))
+    }
+    const roomToBook = pendingBookingRoom || sel?.name
+    if (roomToBook) {
+      setBooking(roomToBook)
+    }
+    setPendingBookingRoom(null)
+  }
+
   const checkOut = search.check_out_date
   const nights = nightsBetween(search.check_in_date, checkOut)
 
@@ -971,13 +1011,48 @@ export default function PublicBooking() {
             </span>
           </button>
           <div className="ms-auto flex items-center gap-2">
-            <Link
-              to="/stay"
-              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900"
-            >
-              <User className="size-3.5 text-zinc-500" />
-              <span className="hidden sm:inline">{t("My Bookings")}</span>
-            </Link>
+            {auth.status === "authed" ? (
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/stay"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-100"
+                >
+                  <User className="size-3.5 text-emerald-700" />
+                  <span className="max-w-[120px] truncate">{auth.fullName || auth.user}</span>
+                  <span className="hidden md:inline text-emerald-600 font-normal">({t("My Bookings")})</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => auth.signOut()}
+                  className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-600 hover:text-zinc-900 hover:border-zinc-300 transition"
+                  title={t("Sign out")}
+                >
+                  <LogOut className="size-3.5" />
+                  <span className="hidden sm:inline">{t("Sign out")}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingBookingRoom(null)
+                    setShowAuthModal(true)
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
+                >
+                  <LogIn className="size-3.5 text-zinc-500" />
+                  <span>{t("Sign In")}</span>
+                </button>
+                <Link
+                  to="/stay"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900"
+                >
+                  <User className="size-3.5 text-zinc-500" />
+                  <span className="hidden sm:inline">{t("My Bookings")}</span>
+                </Link>
+              </div>
+            )}
             <LanguageSwitcher className="hidden md:flex" />
           </div>
         </div>
@@ -1667,7 +1742,7 @@ export default function PublicBooking() {
                 {sel && selPlan ? (
                   <div className="mt-4">
                     {summary(false)}
-                    <Button className="mt-5 w-full justify-center py-2.5 text-base" onClick={() => setBooking(sel.name)}>
+                    <Button className="mt-5 w-full justify-center py-2.5 text-base" onClick={() => handleStartBooking(sel.name)}>
                       {t("Continue")}
                     </Button>
                   </div>
@@ -1689,7 +1764,7 @@ export default function PublicBooking() {
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden">
           <div className="mx-auto flex max-w-6xl items-center gap-4">
             <div className="min-w-0 flex-1">{summary(true)}</div>
-            <Button className="shrink-0 px-6 py-2.5 text-base" onClick={() => setBooking(sel.name)}>
+            <Button className="shrink-0 px-6 py-2.5 text-base" onClick={() => handleStartBooking(sel.name)}>
               {t("Continue")}
             </Button>
           </div>
@@ -1927,6 +2002,15 @@ export default function PublicBooking() {
           )}
         </Sheet>
       )}
+
+      <CustomerAuthModal
+        isOpen={showAuthModal}
+        onClose={() => {
+          setShowAuthModal(false)
+          setPendingBookingRoom(null)
+        }}
+        onSuccess={handleAuthSuccess}
+      />
     </div>
   )
 }

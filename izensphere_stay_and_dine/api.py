@@ -57,9 +57,20 @@ def whoami():
 	{user: "Guest"} cleanly instead of a 403 in the console.
 	"""
 	user = frappe.session.user
+	if user == "Guest":
+		return {
+			"user": "Guest",
+			"full_name": "Guest",
+			"email": "",
+			"phone": "",
+			"roles": ["Guest"],
+		}
+	u = frappe.db.get_value("User", user, ["full_name", "email", "phone"], as_dict=True) or {}
 	return {
 		"user": user,
-		"full_name": frappe.db.get_value("User", user, "full_name") or user,
+		"full_name": u.get("full_name") or user,
+		"email": u.get("email") or (user if "@" in user else ""),
+		"phone": u.get("phone") or "",
 		"roles": frappe.get_roles(user),
 	}
 
