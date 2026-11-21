@@ -143,14 +143,16 @@
    "fieldtype": "Link",
    "label": "Property",
    "options": "Property",
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "fieldname": "guest",
    "fieldtype": "Link",
    "label": "Guest",
    "options": "Guest",
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "fetch_from": "guest.full_name",
@@ -548,7 +550,8 @@
    "fieldtype": "Data",
    "hidden": 1,
    "label": "Pre-checkin Token",
-   "no_copy": 1
+   "no_copy": 1,
+   "search_index": 1
   },
   {
    "default": "Not Started",

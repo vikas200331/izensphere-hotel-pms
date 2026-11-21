@@ -48,41 +48,48 @@ export interface BookingSummary {
 export default function GuestPortal() {
   const { t } = useT()
   const [searchParams] = useSearchParams()
-  const [query, setQuery] = useState(searchParams.get("ref") || searchParams.get("phone") || "")
+  const [reference, setReference] = useState(searchParams.get("ref") || "")
+  const [phone, setPhone] = useState(searchParams.get("phone") || "")
+  const token = searchParams.get("token") || ""
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
   const [bookings, setBookings] = useState<BookingSummary[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  const handleSearch = async (val?: string) => {
-    const q = (val ?? query).trim()
-    if (!q) return
+  const handleSearch = async (overrideRef?: string, overridePhone?: string) => {
+    const r = (overrideRef ?? reference).trim()
+    const p = (overridePhone ?? phone).trim()
+    if (!token && (!r || !p)) {
+      setError(t("Please enter both your Booking Reference and Phone Number."))
+      return
+    }
     setLoading(true)
     setError(null)
     setSearched(true)
     try {
       const res = await call<{ found: boolean; bookings: BookingSummary[] }>(
         "izensphere_stay_and_dine.public_api.lookup_booking",
-        { reference: q, phone: q },
+        { reference: r, phone: p, token },
       )
       if (res.found && res.bookings.length > 0) {
         setBookings(res.bookings)
       } else {
         setBookings([])
-        setError(t("No reservations found for this booking reference or phone number."))
+        setError(t("No reservations found matching this booking reference and phone number."))
       }
     } catch (e: unknown) {
       setBookings([])
-      setError((e as Error).message || t("Could not look up reservation. Please check your reference."))
+      setError((e as Error).message || t("Could not look up reservation. Please check your reference and phone."))
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    const initial = searchParams.get("ref") || searchParams.get("phone")
-    if (initial) {
-      handleSearch(initial)
+    const r = searchParams.get("ref")
+    const p = searchParams.get("phone")
+    if (token || (r && p)) {
+      handleSearch(r || undefined, p || undefined)
     }
   }, [searchParams])
 
@@ -113,7 +120,7 @@ export default function GuestPortal() {
               <h1 className="text-lg font-bold text-zinc-900 tracking-tight">
                 Izensphere Stay &amp; Dine
               </h1>
-              <p className="text-xs text-zinc-500">{t("Guest Stay Portal & Booking Lookup")}</p>
+              <p className="text-xs text-zinc-500">{t("Guest Stay Portal & Booking Verification")}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -135,7 +142,7 @@ export default function GuestPortal() {
               {t("Find Your Booking")}
             </h2>
             <p className="mt-1 text-sm text-zinc-600">
-              {t("View your stay details, check in online before arrival, view your folio balance, or download your confirmation.")}
+              {t("Enter your Booking Reference and the Phone Number used during reservation to view your stay details and complete online check-in.")}
             </p>
           </div>
 
@@ -150,18 +157,28 @@ export default function GuestPortal() {
               <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
               <input
                 type="text"
-                placeholder={t("Enter Booking Reference (e.g. RES-2026-00029) or Phone Number")}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t("Booking Reference (e.g. RES-2026-00030)")}
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-zinc-50/50 py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-brand-600 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-600"
+              />
+            </div>
+            <div className="relative flex-1">
+              <Phone className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="tel"
+                placeholder={t("Guest Phone Number")}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
                 className="w-full rounded-xl border border-zinc-300 bg-zinc-50/50 py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-brand-600 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-600"
               />
             </div>
             <Button
               type="submit"
-              disabled={loading || !query.trim()}
-              className="justify-center py-3 px-6 text-sm font-semibold"
+              disabled={loading || (!token && (!reference.trim() || !phone.trim()))}
+              className="justify-center py-3 px-6 text-sm font-semibold shrink-0"
             >
-              {loading ? t("Searching…") : t("Find My Booking")}
+              {loading ? t("Searching…") : t("Look Up Stay")}
             </Button>
           </form>
 

@@ -48,13 +48,15 @@
    "fieldtype": "Link",
    "label": "Reservation",
    "options": "Reservation",
-   "description": "Empty on an Account folio (an invoice raised on a company's AR account, not a stay)."
+   "description": "Empty on an Account folio (an invoice raised on a company's AR account, not a stay).",
+   "search_index": 1
   },
   {
    "fieldname": "guest",
    "fieldtype": "Link",
    "label": "Guest",
-   "options": "Guest"
+   "options": "Guest",
+   "search_index": 1
   },
   {
    "fetch_from": "guest.full_name",

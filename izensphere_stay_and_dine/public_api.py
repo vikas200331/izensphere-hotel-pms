@@ -1152,27 +1152,51 @@ def hosting_enquiry(full_name: str, email: str, phone: str = "",
 
 
 @frappe.whitelist(allow_guest=True)
-def lookup_booking(reference: str = "", phone: str = ""):
-	"""Public endpoint for guest stay portal: look up reservation by reference or phone."""
+@rate_limit(limit=20, seconds=300)
+def lookup_booking(reference: str = "", phone: str = "", token: str = ""):
+	"""Public endpoint for guest stay portal: look up reservation securely.
+
+	Security rules:
+	1. Unauthenticated (Guest) users MUST supply:
+	   - Either a valid cryptographic token (length >= 20), OR
+	   - BOTH reference (e.g. RES-2026-00030) AND the matching phone number used when booking.
+	   Searching by phone alone or reference alone without phone verification is strictly
+	   forbidden for guest users to prevent enumeration of sequential IDs or phone numbers.
+	2. Authenticated staff with front desk or administrative roles may search by reference or phone.
+	"""
 	ref = (reference or "").strip()
-	phone = (phone or "").strip()
-	if not ref and not phone:
-		frappe.throw("Please enter a booking reference or phone number.")
+	ph = (phone or "").strip()
+	tok = (token or "").strip()
+	is_staff = frappe.session.user != "Guest" and any(
+		r in ("Front Desk", "Hotel Admin", "System Manager", "Administrator", "Kamra Agent")
+		for r in frappe.get_roles()
+	)
+
+	if not is_staff:
+		if tok:
+			if len(tok) < 20:
+				frappe.throw("Invalid booking token.")
+		elif not ref or not ph:
+			frappe.throw("Please enter both your Booking Reference and the Phone Number used during booking.")
+
+	def _digits(s: str) -> str:
+		return "".join(c for c in str(s or "") if c.isdigit())
 
 	res_names = []
-	if ref:
+	if tok:
+		name = frappe.db.get_value("Reservation", {"precheckin_token": tok})
+		if name:
+			res_names.append(name)
+	elif ref:
 		names = frappe.db.sql_list(
 			"""SELECT name FROM `tabReservation`
 			   WHERE name = %(ref)s OR ota_ref = %(ref)s OR precheckin_token = %(ref)s""",
 			{"ref": ref}
 		)
 		res_names.extend(names)
-		clean_ref = "".join(c for c in ref if c.isdigit())
-		if len(clean_ref) >= 8 and not res_names:
-			phone = clean_ref
 
-	if phone:
-		clean_ph = "".join(c for c in phone if c.isdigit())
+	if is_staff and ph and not res_names:
+		clean_ph = _digits(ph)
 		suffix = clean_ph[-10:] if len(clean_ph) >= 10 else clean_ph
 		guest_names = frappe.db.sql_list(
 			"""SELECT name FROM `tabGuest` WHERE REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '+', '') LIKE %(ph)s""",
@@ -1192,8 +1216,25 @@ def lookup_booking(reference: str = "", phone: str = ""):
 	bookings = []
 	for rname in res_names[:10]:
 		res = frappe.get_doc("Reservation", rname)
+		guest_doc = frappe.get_cached_doc("Guest", res.guest)
+
+		# Security verification for unauthenticated users:
+		# If looking up by reference (not token), verify that phone matches the guest's record!
+		if not is_staff and not tok:
+			input_digits = _digits(ph)
+			stored_digits = _digits(guest_doc.phone)
+			match = False
+			if input_digits and stored_digits:
+				if input_digits == stored_digits:
+					match = True
+				elif len(input_digits) >= 8 and len(stored_digits) >= 8 and input_digits[-8:] == stored_digits[-8:]:
+					match = True
+			if not match:
+				# Do not reveal whether reference exists or not
+				continue
+
 		prop = frappe.get_cached_doc("Property", res.property)
-		guest_name = frappe.db.get_value("Guest", res.guest, "full_name") or res.guest
+		guest_name = guest_doc.full_name or guest_doc.guest_name or "Guest"
 
 		folio_info = frappe.db.get_value(
 			"Folio", {"reservation": res.name},
@@ -1236,5 +1277,8 @@ def lookup_booking(reference: str = "", phone: str = ""):
 			"balance": balance,
 			"currency_symbol": "₹",
 		})
+
+	if not bookings:
+		return {"found": False, "bookings": []}
 
 	return {"found": True, "bookings": bookings}
