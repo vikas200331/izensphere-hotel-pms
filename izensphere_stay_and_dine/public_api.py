@@ -1149,3 +1149,92 @@ def hosting_enquiry(full_name: str, email: str, phone: str = "",
 		pass  # no SMTP yet - the enquiry is already saved
 	return {"ok": True,
 	        "message": "Thanks - we'll get back to you within a day."}
+
+
+@frappe.whitelist(allow_guest=True)
+def lookup_booking(reference: str = "", phone: str = ""):
+	"""Public endpoint for guest stay portal: look up reservation by reference or phone."""
+	ref = (reference or "").strip()
+	phone = (phone or "").strip()
+	if not ref and not phone:
+		frappe.throw("Please enter a booking reference or phone number.")
+
+	res_names = []
+	if ref:
+		names = frappe.db.sql_list(
+			"""SELECT name FROM `tabReservation`
+			   WHERE name = %(ref)s OR ota_ref = %(ref)s OR precheckin_token = %(ref)s""",
+			{"ref": ref}
+		)
+		res_names.extend(names)
+		clean_ref = "".join(c for c in ref if c.isdigit())
+		if len(clean_ref) >= 8 and not res_names:
+			phone = clean_ref
+
+	if phone:
+		clean_ph = "".join(c for c in phone if c.isdigit())
+		suffix = clean_ph[-10:] if len(clean_ph) >= 10 else clean_ph
+		guest_names = frappe.db.sql_list(
+			"""SELECT name FROM `tabGuest` WHERE REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '+', '') LIKE %(ph)s""",
+			{"ph": f"%{suffix}%"}
+		)
+		if guest_names:
+			names = frappe.db.sql_list(
+				"""SELECT name FROM `tabReservation` WHERE guest IN %(guests)s ORDER BY check_in_date DESC LIMIT 10""",
+				{"guests": tuple(guest_names)}
+			)
+			res_names.extend(names)
+
+	res_names = sorted(list(set(res_names)), reverse=True)
+	if not res_names:
+		return {"found": False, "bookings": []}
+
+	bookings = []
+	for rname in res_names[:10]:
+		res = frappe.get_doc("Reservation", rname)
+		prop = frappe.get_cached_doc("Property", res.property)
+		guest_name = frappe.db.get_value("Guest", res.guest, "full_name") or res.guest
+
+		folio_info = frappe.db.get_value(
+			"Folio", {"reservation": res.name},
+			["name", "grand_total", "payments_total", "balance", "status"],
+			as_dict=True
+		)
+
+		grand_total = float(folio_info.grand_total if folio_info else (res.amount_after_tax or 0.0))
+		paid = float(folio_info.payments_total if folio_info else 0.0)
+		balance = float(folio_info.balance if folio_info else max(0.0, grand_total - paid))
+
+		rt_name = res.room_type
+		if "-" in rt_name:
+			rt_name = rt_name.split("-", 1)[1]
+
+		bookings.append({
+			"reservation": res.name,
+			"property": prop.property_name,
+			"property_name": prop.property_name,
+			"property_slug": prop.name.lower().replace(" ", "-"),
+			"city": prop.city or "",
+			"phone": prop.phone or "",
+			"wifi_ssid": prop.get("wifi_ssid") or "",
+			"wifi_password": prop.get("wifi_password") or "",
+			"checkin_time": str(prop.checkin_time or "14:00"),
+			"checkout_time": str(prop.checkout_time or "11:00"),
+			"guest_name": guest_name,
+			"room_type": rt_name,
+			"room": res.room or "Assigned on arrival",
+			"check_in_date": str(res.check_in_date),
+			"check_out_date": str(res.check_out_date),
+			"nights": int(res.nights or 1),
+			"adults": int(res.adults or 1),
+			"children": int(res.children or 0),
+			"status": res.status,
+			"precheckin_status": res.precheckin_status or "Pending",
+			"precheckin_token": res.precheckin_token or "",
+			"grand_total": grand_total,
+			"paid_amount": paid,
+			"balance": balance,
+			"currency_symbol": "₹",
+		})
+
+	return {"found": True, "bookings": bookings}

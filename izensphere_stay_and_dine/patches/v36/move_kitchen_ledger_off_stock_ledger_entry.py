@@ -19,7 +19,7 @@ def execute():
 	if not frappe.db.table_exists(OLD) or not frappe.db.has_column(OLD, "ingredient"):
 		return
 
-	frappe.reload_doc("kamra", "doctype", "ingredient_ledger_entry")
+	frappe.reload_doc("izensphere_stay_and_dine", "doctype", "ingredient_ledger_entry")
 	cols = sorted(set(frappe.db.get_table_columns(OLD)) & set(frappe.db.get_table_columns(NEW)))
 	col_sql = ", ".join(f"`{c}`" for c in cols)
 	kitchen = "`ingredient` IS NOT NULL AND `ingredient` != ''"

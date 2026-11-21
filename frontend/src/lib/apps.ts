@@ -328,7 +328,7 @@ export const APPS: AppDef[] = [
         keywords: ["Public booking settings", "Deposit policy", "Showcase"] },
       { href: toFullPath("/book"), label: "Customer Booking Page", icon: Globe,
         keywords: ["Book online", "Guest booking engine", "Reservation website"] },
-      { href: toFullPath("/stay"), label: "Guest Stay Portal", icon: Smartphone,
+      { to: "/stay", label: "Guest Stay Portal", icon: Smartphone,
         keywords: ["Stay portal", "Guest self check-in", "Digital folio"] },
     ],
     extraPrefixes: ["/booking-settings"],

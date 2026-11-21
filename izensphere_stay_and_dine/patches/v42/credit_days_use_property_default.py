@@ -13,6 +13,6 @@ def execute():
 	if not frappe.db.table_exists("City Ledger Account"):
 		return
 	if not frappe.db.has_column("City Ledger Account", "use_default_credit_days"):
-		frappe.reload_doc("kamra", "doctype", "city_ledger_account")
+		frappe.reload_doc("izensphere_stay_and_dine", "doctype", "city_ledger_account")
 	frappe.db.sql("""UPDATE `tabCity Ledger Account`
 	                 SET use_default_credit_days = IF(IFNULL(credit_days, 0) > 0, 0, 1)""")

@@ -589,7 +589,7 @@ export const menuItemsConfig: ScreenConfig = {
   title: "Menu",
   description:
     "Dishes and drinks across your outlets - photo, price, veg/non-veg. Allergens, stations and courses are edited under Settings → F&B → Menu master lists.",
-  searchFields: ["item_name", "category"],
+  searchFields: ["item_name", "category", "outlet"],
   pageSize: 50,
   propertyScoped: true,
   orderBy: "category, item_name",

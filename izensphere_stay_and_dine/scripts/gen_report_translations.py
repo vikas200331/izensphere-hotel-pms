@@ -11,9 +11,9 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = (ROOT / "kamra" / "custom_reports.py").read_text()
+SRC = (ROOT / "izensphere_stay_and_dine" / "custom_reports.py").read_text()
 # company statements and payment reminders (#238): labels, _tr() and _() text
-STATEMENTS = (ROOT / "kamra" / "statements.py").read_text()
+STATEMENTS = (ROOT / "izensphere_stay_and_dine" / "statements.py").read_text()
 # every label/title literal in the report catalog, plus the page and email text
 WORDS = sorted(set(re.findall(r'"(?:label|title)": "([^"]+)"', SRC))
                | set(re.findall(r'_col\("\w+", "([^"]+)"', SRC))
@@ -29,7 +29,7 @@ def main():
 	missing = []
 	for lang in ("es", "ar"):
 		ui = json.loads((ROOT / "frontend/src/i18n/locales" / f"{lang}.json").read_text())
-		out = ROOT / "kamra" / "translations" / f"{lang}.csv"
+		out = ROOT / "izensphere_stay_and_dine" / "translations" / f"{lang}.csv"
 		# keep rows other code added by hand (booking, privacy messages)
 		rows = dict(csv.reader(out.open(encoding="utf-8"))) if out.exists() else {}
 		for word in WORDS:

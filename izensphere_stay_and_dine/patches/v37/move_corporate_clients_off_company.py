@@ -36,7 +36,7 @@ def execute():
 		return
 
 	erpnext = "erpnext" in frappe.get_installed_apps()
-	frappe.reload_doc("kamra", "doctype", "corporate_account")
+	frappe.reload_doc("izensphere_stay_and_dine", "doctype", "corporate_account")
 
 	if frappe.db.has_column(OLD, "abbr"):
 		names = frappe.db.sql_list(f"SELECT name FROM `tab{OLD}` WHERE IFNULL(abbr, '') = ''")  # nosemgrep: frappe-sql-format-injection -- constant

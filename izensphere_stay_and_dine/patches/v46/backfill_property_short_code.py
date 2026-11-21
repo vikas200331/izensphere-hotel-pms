@@ -6,7 +6,7 @@ import frappe
 
 
 def execute():
-	frappe.reload_doc("kamra", "doctype", "property")
+	frappe.reload_doc("izensphere_stay_and_dine", "doctype", "property")
 	from izensphere_stay_and_dine.izensphere_stay_and_dine.doctype.property.property import default_short_code
 	for p in frappe.get_all("Property", filters={"short_code": ("is", "not set")},
 	                        fields=["name", "property_name"], order_by="creation asc"):

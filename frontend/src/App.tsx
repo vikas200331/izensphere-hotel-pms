@@ -20,6 +20,7 @@ const EndOfDayWizard = lazy(() => import("./screens/EndOfDayWizard"))
 const AuditPack = lazy(() => import("./screens/AuditPack"))
 const PublicBooking = lazy(() => import("./screens/PublicBooking"))
 const PublicListing = lazy(() => import("./screens/PublicListing"))
+const GuestPortal = lazy(() => import("./screens/GuestPortal"))
 const PublicCheckin = lazy(() => import("./screens/PublicCheckin"))
 const FolioView = lazy(() => import("./screens/FolioView"))
 const GuestJourney = lazy(() => import("./screens/GuestJourney"))
@@ -167,7 +168,7 @@ export default function App() {
           path="book/:checkin/:checkout?/:adults?/:children?"
           element={<PublicBooking />}
         />
-        <Route path="stay" element={<Navigate to="/book" replace />} />
+        <Route path="stay" element={<GuestPortal />} />
         <Route path="stay/:slug" element={<PublicListing />} />
         <Route
           path="stay/:slug/:checkin/:checkout?/:adults?/:children?"
@@ -352,6 +353,7 @@ export default function App() {
             path="housekeeping"
             element={<ConfiguredScreen config="housekeepingConfig" />}
           />
+          <Route path="stay" element={<GuestPortal />} />
           <Route
             path="*"
             element={

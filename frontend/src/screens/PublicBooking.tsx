@@ -1739,6 +1739,18 @@ export default function PublicBooking() {
                   ? t("Your request goes to the property to confirm.")
                   : t("We've saved your number; the front desk will reach out with payment details and before arrival.")}
               </p>
+              <div className="mt-6 rounded-xl border border-brand-100 bg-brand-50/50 p-4 text-start">
+                <p className="text-xs font-semibold text-brand-900">{t("Guest Stay Portal")}</p>
+                <p className="mt-0.5 text-xs text-zinc-600 leading-relaxed">
+                  {t("You can track your stay, complete online check-in, and view billing details anytime using your booking number.")}
+                </p>
+                <Link
+                  to={`/stay?ref=${encodeURIComponent(done.reservation)}`}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+                >
+                  {t("Open Stay Portal")}
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="space-y-6">

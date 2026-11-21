@@ -14,9 +14,9 @@ def execute():
 	if not frappe.db.table_exists("City Ledger Entry"):
 		return
 	if not frappe.db.has_column("City Ledger Entry", "due_date"):
-		frappe.reload_doc("kamra", "doctype", "city_ledger_entry")
+		frappe.reload_doc("izensphere_stay_and_dine", "doctype", "city_ledger_entry")
 	if not frappe.db.has_column("City Ledger Account", "credit_days"):
-		frappe.reload_doc("kamra", "doctype", "city_ledger_account")
+		frappe.reload_doc("izensphere_stay_and_dine", "doctype", "city_ledger_account")
 	from frappe.utils import add_days
 
 	from izensphere_stay_and_dine.ledger import effective_credit_days
