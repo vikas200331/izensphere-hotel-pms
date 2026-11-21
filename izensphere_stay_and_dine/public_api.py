@@ -1250,6 +1250,16 @@ def lookup_booking(reference: str = "", phone: str = "", token: str = ""):
 		if "-" in rt_name:
 			rt_name = rt_name.split("-", 1)[1]
 
+		room_num = ""
+		if res.room:
+			room_num = frappe.db.get_value("Room", res.room, "room_number") or res.room
+
+		meal_plan_label = "Room only"
+		if res.meal_plan:
+			meal_plan_label = frappe.db.get_value("Meal Plan", res.meal_plan, "label") or res.meal_plan
+
+		payment_status = "Paid" if balance <= 0.001 else ("Partially Paid" if paid > 0 else "Unpaid")
+
 		bookings.append({
 			"reservation": res.name,
 			"property": prop.property_name,
@@ -1262,16 +1272,26 @@ def lookup_booking(reference: str = "", phone: str = "", token: str = ""):
 			"checkin_time": str(prop.checkin_time or "14:00"),
 			"checkout_time": str(prop.checkout_time or "11:00"),
 			"guest_name": guest_name,
+			"guest_phone": guest_doc.phone or "",
+			"guest_email": guest_doc.email or "",
 			"room_type": rt_name,
-			"room": res.room or "Assigned on arrival",
+			"room": res.room or "",
+			"room_number": room_num,
 			"check_in_date": str(res.check_in_date),
 			"check_out_date": str(res.check_out_date),
 			"nights": int(res.nights or 1),
 			"adults": int(res.adults or 1),
 			"children": int(res.children or 0),
+			"meal_plan": res.meal_plan or "",
+			"meal_plan_name": meal_plan_label,
 			"status": res.status,
+			"payment_status": payment_status,
 			"precheckin_status": res.precheckin_status or "Pending",
 			"precheckin_token": res.precheckin_token or "",
+			"cancellation_number": res.cancellation_number or "",
+			"cancellation_reason": res.cancellation_reason or "",
+			"special_requests": res.special_requests or "",
+			"created_at": str(res.creation),
 			"grand_total": grand_total,
 			"paid_amount": paid,
 			"balance": balance,
@@ -1282,3 +1302,113 @@ def lookup_booking(reference: str = "", phone: str = "", token: str = ""):
 		return {"found": False, "bookings": []}
 
 	return {"found": True, "bookings": bookings}
+
+
+def _verify_guest_reservation(reference: str = "", phone: str = "", token: str = ""):
+	"""Helper to securely authenticate guest for sensitive operations like modification/cancellation."""
+	ref = (reference or "").strip()
+	ph = (phone or "").strip()
+	tok = (token or "").strip()
+
+	is_staff = frappe.session.user != "Guest" and any(
+		r in ("Front Desk", "Hotel Admin", "System Manager", "Administrator", "Kamra Agent")
+		for r in frappe.get_roles()
+	)
+
+	if not is_staff:
+		if tok:
+			if len(tok) < 20:
+				frappe.throw("Invalid booking token.")
+		elif not ref or not ph:
+			frappe.throw("Please enter both your Booking Reference and the Phone Number used during booking.")
+
+	def _digits(s: str) -> str:
+		return "".join(c for c in str(s or "") if c.isdigit())
+
+	res_name = None
+	if tok:
+		res_name = frappe.db.get_value("Reservation", {"precheckin_token": tok})
+	elif ref:
+		res_name = (
+			frappe.db.get_value("Reservation", {"name": ref})
+			or frappe.db.get_value("Reservation", {"ota_ref": ref})
+			or frappe.db.get_value("Reservation", {"precheckin_token": ref})
+		)
+
+	if not res_name:
+		frappe.throw("Reservation not found or verification failed.")
+
+	res = frappe.get_doc("Reservation", res_name)
+	guest_doc = frappe.get_cached_doc("Guest", res.guest)
+
+	if not is_staff and not tok:
+		input_digits = _digits(ph)
+		stored_digits = _digits(guest_doc.phone)
+		match = False
+		if input_digits and stored_digits:
+			if input_digits == stored_digits:
+				match = True
+			elif len(input_digits) >= 8 and len(stored_digits) >= 8 and input_digits[-8:] == stored_digits[-8:]:
+				match = True
+		if not match:
+			frappe.throw("Reservation not found or verification failed.")
+
+	return res, guest_doc
+
+
+@frappe.whitelist(allow_guest=True)
+@rate_limit(limit=10, seconds=300)
+def request_booking_change(reference: str = "", phone: str = "", token: str = "", change_details: str = "", preferred_dates: str = ""):
+	"""Allow verified guest to submit a modification request."""
+	details = (change_details or "").strip()
+	if not details:
+		frappe.throw("Please describe your requested changes.")
+
+	res, guest = _verify_guest_reservation(reference, phone, token)
+	if res.status in ("Cancelled", "Checked Out"):
+		frappe.throw(f"Modifications cannot be requested for {res.status.lower()} stays.")
+
+	timestamp = frappe.utils.now_datetime().strftime("%Y-%m-%d %H:%M")
+	req_lines = [f"[Guest Change Request - {timestamp}]", details]
+	if preferred_dates:
+		req_lines.append(f"Preferred Dates: {preferred_dates.strip()}")
+
+	change_entry = "\n".join(req_lines)
+	existing_requests = res.special_requests or ""
+	res.special_requests = (existing_requests + "\n\n" + change_entry).strip() if existing_requests else change_entry
+	res.save(ignore_permissions=True)
+
+	try:
+		res.add_comment("Comment", text=f"Guest submitted change request via Stay Portal:\n{change_entry}")
+	except Exception:
+		pass
+
+	return {
+		"ok": True,
+		"message": "Your modification request has been submitted to our Front Desk team. We will review and reach out to you shortly.",
+		"reservation": res.name,
+	}
+
+
+@frappe.whitelist(allow_guest=True)
+@rate_limit(limit=10, seconds=300)
+def cancel_booking(reference: str = "", phone: str = "", token: str = "", reason: str = "Guest request", note: str = ""):
+	"""Allow verified guest to cancel their reservation per cancellation policy."""
+	res, guest = _verify_guest_reservation(reference, phone, token)
+	if res.status not in ("Confirmed", "Draft", "Pending Payment"):
+		frappe.throw(f"Stays with status '{res.status}' cannot be cancelled online. Please contact the front desk directly.")
+
+	from izensphere_stay_and_dine.api import _do_cancel
+	cancel_res = _do_cancel(
+		res,
+		reason=reason or "Guest request",
+		note=note or "Cancelled by guest via Stay Portal"
+	)
+	return {
+		"ok": True,
+		"message": "Your reservation has been cancelled.",
+		"reservation": res.name,
+		"cancellation_number": cancel_res.get("cancellation_number"),
+		"cancellation_fee": cancel_res.get("fee", 0.0),
+		"status": "Cancelled",
+	}

@@ -169,6 +169,7 @@ export default function App() {
           element={<PublicBooking />}
         />
         <Route path="stay" element={<GuestPortal />} />
+        <Route path="my-bookings" element={<GuestPortal />} />
         <Route path="stay/:slug" element={<PublicListing />} />
         <Route
           path="stay/:slug/:checkin/:checkout?/:adults?/:children?"
@@ -354,6 +355,7 @@ export default function App() {
             element={<ConfiguredScreen config="housekeepingConfig" />}
           />
           <Route path="stay" element={<GuestPortal />} />
+          <Route path="my-bookings" element={<GuestPortal />} />
           <Route
             path="*"
             element={

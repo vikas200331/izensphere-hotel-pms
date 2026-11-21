@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Star,
   Users,
+  User,
   Wallet,
   X,
   Zap,
@@ -248,7 +249,16 @@ function PropertyChooser({
               {t("Pick a property to see its rooms, prices and availability.")}
             </p>
           </div>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-3">
+            <Link
+              to="/stay"
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900"
+            >
+              <User className="size-3.5 text-zinc-500" />
+              <span>{t("My Bookings")}</span>
+            </Link>
+            <LanguageSwitcher />
+          </div>
         </div>
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {properties.map((p) => (
@@ -957,7 +967,16 @@ export default function PublicBooking() {
               <Search className="size-3.5" aria-hidden />
             </span>
           </button>
-          <LanguageSwitcher className="ms-auto hidden md:flex" />
+          <div className="ms-auto flex items-center gap-2">
+            <Link
+              to="/stay"
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900"
+            >
+              <User className="size-3.5 text-zinc-500" />
+              <span className="hidden sm:inline">{t("My Bookings")}</span>
+            </Link>
+            <LanguageSwitcher className="hidden md:flex" />
+          </div>
         </div>
 
         {editing && (

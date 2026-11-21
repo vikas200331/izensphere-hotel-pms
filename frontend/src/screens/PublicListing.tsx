@@ -8,6 +8,7 @@ import {
   MapPin,
   Phone,
   Search,
+  User,
   Users,
 } from "lucide-react"
 import { callGuest } from "../lib/api"
@@ -443,6 +444,13 @@ export default function PublicListing() {
           <span className="ml-auto truncate text-sm font-medium text-zinc-500">
             {p.property_name}
           </span>
+          <Link
+            to="/stay"
+            className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900"
+          >
+            <User className="size-3.5 text-zinc-500" />
+            <span className="hidden sm:inline">{t("My Bookings")}</span>
+          </Link>
           <LanguageSwitcher />
         </div>
       </header>
