@@ -14,6 +14,7 @@ import { serverError } from "../lib/resource"
 import { cur, moneyLocale } from "../lib/money"
 import { cn } from "../lib/utils"
 import { t as translate, useUILanguage } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 const inr = (n: unknown) =>
   Number(n ?? 0).toLocaleString(moneyLocale(), { maximumFractionDigits: 0 })
@@ -152,12 +153,16 @@ export default function PosDashboard() {
           </select>
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <input type="date" aria-label={translate("From")} className={inputCls} value={date} max={today()}
-            onChange={(e) => setDate(e.target.value || today())} />
-          <span className="text-sm text-zinc-400">→</span>
-          <input type="date" aria-label={translate("To")} className={inputCls} value={toDate || date}
-            min={date} max={today()}
-            onChange={(e) => setToDate(e.target.value === date ? "" : e.target.value)} />
+          <DateFilterBar
+            mode="range"
+            fromDate={date}
+            toDate={toDate || date}
+            onRangeChange={(from, to) => {
+              setDate(from)
+              setToDate(to === from ? "" : to)
+            }}
+            compact
+          />
           <Link to="/pos"
             className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
             <UtensilsCrossed className="size-4" />{translate("Open POS")}</Link>

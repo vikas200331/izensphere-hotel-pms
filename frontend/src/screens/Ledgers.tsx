@@ -8,6 +8,7 @@ import { fmtAmount } from "../lib/money"
 import { useAuth } from "../lib/auth"
 import CityLedgerPayment from "./CityLedgerPayment"
 import { t as translate, useUILanguage } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 // recording a company's payment is a Finance action (the server gates it too)
 const CAN_SETTLE = ["Finance", "Hotel Admin", "System Manager", "Administrator"]
@@ -127,12 +128,13 @@ export default function Ledgers() {
           <h1 className="text-2xl font-semibold">{translate("Ledgers")}</h1>
           <p className="text-sm text-zinc-500">{translate("Guest · Deposit · AR · Package trial balance")}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+        <div className="flex flex-wrap items-center gap-2">
+          <DateFilterBar
+            mode="single"
+            date={date}
+            onDateChange={setDate}
+            label="Date"
+            compact
           />
           <Button variant="outline" onClick={() => void load()}>{translate("Refresh")}</Button>
         </div>

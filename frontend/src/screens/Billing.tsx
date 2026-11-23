@@ -9,6 +9,7 @@ import { Badge } from "../components/ui/badge"
 import { Button } from "../components/ui/button"
 import { cur, moneyLocale } from "../lib/money"
 import { useT, uiDateLocale } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 import {
   Card,
   CardContent,
@@ -39,21 +40,32 @@ export default function Billing() {
   const { t } = useT()
   const [folios, setFolios] = useState<Row[]>([])
   const [auditRuns, setAuditRuns] = useState<RunRow[]>([])
+  const [dateField, setDateField] = useState("opened_on")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
   const navigate = useNavigate()
 
   const load = useCallback(() => {
+    const filters: (string | number)[][] = [["property", "=", getCurrentProperty()]]
+    if (fromDate) {
+      filters.push([dateField, ">=", fromDate])
+    }
+    if (toDate) {
+      filters.push([dateField, "<=", `${toDate} 23:59:59`])
+    }
+
     listResource("Folio", {
       fields: [
         "name", "guest_name", "reservation", "status", "invoice_number",
         "grand_total", "payments_total", "balance",
       ],
-      filters: [["property", "=", getCurrentProperty()]],
+      filters,
       orderBy: "modified desc",
     }).then(setFolios)
     auditHistory(getCurrentProperty(), 8)
       .then(setAuditRuns)
       .catch(() => setAuditRuns([]))
-  }, [])
+  }, [fromDate, toDate, dateField])
 
   useEffect(load, [load])
 
@@ -142,11 +154,30 @@ export default function Billing() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{t("Folios")}</CardTitle>
-          <span className="text-xs text-zinc-400">
-            {t("Click a folio to post charges, settle and print the GST invoice")}
-          </span>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle>{t("Folios")}</CardTitle>
+            <span className="text-xs text-zinc-400">
+              {t("Click a folio to post charges, settle and print the GST invoice")}
+            </span>
+          </div>
+          <DateFilterBar
+            mode="range"
+            fromDate={fromDate}
+            toDate={toDate}
+            onRangeChange={(from, to) => {
+              setFromDate(from)
+              setToDate(to)
+            }}
+            fieldOptions={[
+              { label: t("Opened Date"), id: "opened_on" },
+              { label: t("Closed Date"), id: "closed_on" },
+              { label: t("Created Date"), id: "creation" },
+            ]}
+            selectedField={dateField}
+            onFieldChange={setDateField}
+            compact
+          />
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

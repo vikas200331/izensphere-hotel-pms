@@ -58,6 +58,8 @@ def _minutes_left(due_by) -> int | None:
 def tickets_search(property: str, view: str = "open", category: str | None = None,
                    priority: str | None = None, q: str | None = None,
                    assignee: str | None = None, older_than_days: int = 0,
+                   from_date: str | None = None, to_date: str | None = None,
+                   date_field: str = "creation",
                    limit: int = 200):
 	"""Tickets for a property with the filters a supervisor needs.
 
@@ -77,6 +79,12 @@ def tickets_search(property: str, view: str = "open", category: str | None = Non
 		        t.resolved_by, t.first_response_at, t.reopened_count, t.creation)
 		.where(t.property == property)
 	)
+	if from_date:
+		df_col = getattr(t, date_field, t.creation)
+		query = query.where(df_col >= f"{from_date} 00:00:00")
+	if to_date:
+		df_col = getattr(t, date_field, t.creation)
+		query = query.where(df_col <= f"{to_date} 23:59:59")
 	if view == "open":
 		query = query.where(is_open)
 	elif view == "mine":

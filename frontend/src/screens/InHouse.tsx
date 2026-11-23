@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom"
-import { ChevronLeft, ChevronRight, LogIn, LogOut, Receipt, Users } from "lucide-react"
+import { LogIn, LogOut, Receipt, Users } from "lucide-react"
 
 import { getSnapshot, reservationDetail, type ReservationRow, type Snapshot } from "../lib/api"
 import { Badge } from "../components/ui/badge"
@@ -14,6 +14,7 @@ import { shiftDate } from "../lib/stay"
 import { cur, moneyLocale } from "../lib/money"
 import { serverError } from "../lib/resource"
 import { useT, t as translate, uiDateLocale } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 /** Everyone at the property on a day, in one place: who is due in, who is
  *  in house and who is due out, each with the desk's actions. */
@@ -118,13 +119,6 @@ export default function InHouse() {
     }
   }
 
-  const prettyDate = new Date(date + "T00:00:00").toLocaleDateString(uiDateLocale(undefined), {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  })
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -132,35 +126,27 @@ export default function InHouse() {
           <h1 className="text-xl font-semibold text-zinc-900">{t("In House")}</h1>
           <p className="text-xs text-zinc-500">{t("Arrivals, guests in house and departures, in one list.")}</p>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-white p-0.5 text-sm">
-          <button
-            aria-label={t("Previous day")}
-            className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100"
-            onClick={() => setQuery({ date: shift(date, -1) })}
-          >
-            <ChevronLeft className="size-4" />
-          </button>
-          <button
-            className={cn("rounded-md px-2.5 py-1 font-medium", date === today ? "text-brand-700" : "text-zinc-700")}
-            onClick={() => setQuery({ date: today })}
-            title={t("Back to today")}
-          >
-            {prettyDate}
-          </button>
-          <button
-            aria-label={t("Next day")}
-            className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100"
-            onClick={() => setQuery({ date: shift(date, 1) })}
-          >
-            <ChevronRight className="size-4" />
-          </button>
-          {tab === "arrivals" && (
-            <label className="flex items-center gap-1 border-s border-zinc-200 ps-2 text-xs text-zinc-500">
-              {t("Until")}
-              <input type="date" className="rounded-md px-1 py-1 text-sm text-zinc-700" value={until}
-                min={shift(date, 1)} max={shift(date, 13)}
-                onChange={(e) => setQuery({ until: e.target.value })} />
-            </label>
+        <div>
+          {tab === "arrivals" ? (
+            <DateFilterBar
+              mode="range"
+              fromDate={date}
+              toDate={until || date}
+              onRangeChange={(from, to) =>
+                setQuery({
+                  date: from || today,
+                  until: to && to !== from ? to : "",
+                })
+              }
+              compact
+            />
+          ) : (
+            <DateFilterBar
+              mode="single"
+              date={date}
+              onDateChange={(d) => setQuery({ date: d, until: "" })}
+              compact
+            />
           )}
         </div>
       </div>

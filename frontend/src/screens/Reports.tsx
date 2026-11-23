@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { cur, moneyLocale } from "../lib/money"
 import { useT, t as translate } from "../lib/i18n"
 import { useAuth } from "../lib/auth"
+import DateFilterBar from "../components/DateFilterBar"
 
 const VOID_REPORT_ROLES = ["Finance", "Hotel Admin", "System Manager", "Administrator"]
 const EDIT_ROLES = ["Finance", "Hotel Admin", "System Manager", "Administrator"]
@@ -631,28 +632,20 @@ export default function Reports({ initialTab = "saved" }: { initialTab?: Tab }) 
 
       {tab === "packs" && (
         <div>
-          <div className="mb-3 flex flex-wrap items-end gap-2">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="mr-auto text-sm text-zinc-500">
               {t("One page per department. You see the parts your role can open.")}
             </p>
-            <label className="text-xs text-zinc-500">
-              {t("From")}
-              <input
-                type="date"
-                className="ms-1 rounded-lg border border-zinc-300 px-2 py-1"
-                value={fromDate}
-                onChange={(e) => e.target.value && setFromDate(e.target.value)}
-              />
-            </label>
-            <label className="text-xs text-zinc-500">
-              {t("To")}
-              <input
-                type="date"
-                className="ms-1 rounded-lg border border-zinc-300 px-2 py-1"
-                value={toDate}
-                onChange={(e) => e.target.value && setToDate(e.target.value)}
-              />
-            </label>
+            <DateFilterBar
+              mode="range"
+              fromDate={fromDate}
+              toDate={toDate}
+              onRangeChange={(from, to) => {
+                setFromDate(from)
+                setToDate(to)
+              }}
+              compact
+            />
           </div>
           {!loading && packs.length === 0 && (
             <p className="text-sm text-zinc-500">{t("Your role has no reports.")}</p>
@@ -722,25 +715,18 @@ export default function Reports({ initialTab = "saved" }: { initialTab?: Tab }) 
                   <p className="mt-1 text-xs text-zinc-500">{translate(activeDataset.description)}</p>
                 )}
               </label>
-              <div className="flex gap-2">
-                <label className="flex-1">
-                  <span className="text-xs uppercase tracking-wider text-zinc-500">{t("From")}</span>
-                  <input
-                    type="date"
-                    className="mt-1 w-full rounded-lg border border-zinc-300 px-2 py-1.5"
-                    value={fromDate}
-                    onChange={(e) => e.target.value && setFromDate(e.target.value)}
-                  />
-                </label>
-                <label className="flex-1">
-                  <span className="text-xs uppercase tracking-wider text-zinc-500">{t("To")}</span>
-                  <input
-                    type="date"
-                    className="mt-1 w-full rounded-lg border border-zinc-300 px-2 py-1.5"
-                    value={toDate}
-                    onChange={(e) => e.target.value && setToDate(e.target.value)}
-                  />
-                </label>
+              <div className="space-y-1">
+                <span className="text-xs uppercase tracking-wider text-zinc-500">{t("Date range")}</span>
+                <DateFilterBar
+                  mode="range"
+                  fromDate={fromDate}
+                  toDate={toDate}
+                  onRangeChange={(from, to) => {
+                    setFromDate(from)
+                    setToDate(to)
+                  }}
+                  compact
+                />
               </div>
 
               {activeDataset && (
@@ -1033,22 +1019,16 @@ function FlashPanel(props: {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap justify-end gap-2 print:hidden">
-        <input
-          type="date"
-          aria-label={t("From")}
-          className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm sm:flex-none"
-          value={from || date}
-          max={date}
-          onChange={(e) => setFrom(e.target.value === date ? "" : e.target.value)}
-        />
-        <span className="self-center text-sm text-zinc-400">→</span>
-        <input
-          type="date"
-          aria-label={t("Report date")}
-          className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm sm:flex-none"
-          value={date}
-          onChange={(e) => e.target.value && setDate(e.target.value)}
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-2 print:hidden">
+        <DateFilterBar
+          mode="range"
+          fromDate={from || date}
+          toDate={date}
+          onRangeChange={(f, to) => {
+            setFrom(f === to ? "" : f)
+            setDate(to)
+          }}
+          compact
         />
         <Button variant="outline" onClick={() => window.print()}>
           <Printer className="size-4" aria-hidden /> {t("Print")}

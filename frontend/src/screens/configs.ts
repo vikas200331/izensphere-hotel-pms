@@ -116,6 +116,14 @@ export const ratePlansConfig: ScreenConfig = {
 export const seasonsConfig: ScreenConfig = {
   doctype: "Season",
   title: "Seasons",
+  dateFilter: {
+    field: "start_date",
+    label: "Start date",
+    fields: [
+      { field: "start_date", label: "Start date" },
+      { field: "end_date", label: "End date" },
+    ],
+  },
   description:
     "Date ranges that lift or set nightly rates. Highest priority wins. Toggle Disabled to activate or pause a season.",
   propertyScoped: true,
@@ -152,6 +160,14 @@ export const seasonsConfig: ScreenConfig = {
 export const vouchersConfig: ScreenConfig = {
   doctype: "Discount Voucher",
   title: "Vouchers",
+  dateFilter: {
+    field: "valid_from",
+    label: "Valid from",
+    fields: [
+      { field: "valid_from", label: "Valid from" },
+      { field: "valid_to", label: "Valid to" },
+    ],
+  },
   description:
     "Discount codes guests or agents can apply at booking. Toggle Disabled to activate or deactivate a code.",
   searchFields: ["voucher_code"],
@@ -281,6 +297,14 @@ export const travelAgentsConfig: ScreenConfig = {
 export const roomBlocksConfig: ScreenConfig = {
   doctype: "Room Block",
   title: "Room Blocks",
+  dateFilter: {
+    field: "from_date",
+    label: "Block date",
+    fields: [
+      { field: "from_date", label: "Start date" },
+      { field: "to_date", label: "End date" },
+    ],
+  },
   description:
     "Hold rooms out of sale for house use, VIPs, owners or maintenance. Blocked rooms don't show as available and won't sell.",
   searchFields: ["room", "note"],
@@ -312,6 +336,14 @@ export const roomBlocksConfig: ScreenConfig = {
 export const lostFoundConfig: ScreenConfig = {
   doctype: "Lost And Found Item",
   title: "Lost & Found",
+  dateFilter: {
+    field: "found_on",
+    label: "Found date",
+    fields: [
+      { field: "found_on", label: "Found date" },
+      { field: "returned_on", label: "Returned date" },
+    ],
+  },
   description: "Items found on property; track storage and returns.",
   propertyScoped: true,
   orderBy: "found_on desc",
@@ -344,6 +376,10 @@ export const lostFoundConfig: ScreenConfig = {
 export const shiftsConfig: ScreenConfig = {
   doctype: "Shift Handover",
   title: "Shift Handover",
+  dateFilter: {
+    field: "shift_date",
+    label: "Shift date",
+  },
   description: "Cash count and follow-ups passed between shifts.",
   propertyScoped: true,
   orderBy: "shift_date desc",
@@ -419,6 +455,14 @@ export const companiesConfig: ScreenConfig = {
 export const housekeepingConfig: ScreenConfig = {
   doctype: "Housekeeping Task",
   title: "Housekeeping Tasks",
+  dateFilter: {
+    field: "due_by",
+    label: "Due date",
+    fields: [
+      { field: "due_by", label: "Due date" },
+      { field: "creation", label: "Created on" },
+    ],
+  },
   description: "Cleans and inspections. Completing a task updates the room's live status.",
   searchFields: ["room"],
   filters: [{ field: "status", label: "Status", options: ["Pending", "In Progress", "Done", "Verified"] }],
@@ -445,7 +489,15 @@ export const housekeepingConfig: ScreenConfig = {
 export const reservationsConfig: ScreenConfig = {
   doctype: "Reservation",
   title: "Reservations",
-  dateFilter: { field: "check_in_date", label: "Check-in" },
+  dateFilter: {
+    field: "check_in_date",
+    label: "Check-in date",
+    fields: [
+      { field: "check_in_date", label: "Check-in date" },
+      { field: "check_out_date", label: "Check-out date" },
+      { field: "creation", label: "Booking date" },
+    ],
+  },
   description: "All bookings. Create new ones with the New booking button above.",
   propertyScoped: true,
   allowCreate: false,
@@ -491,7 +543,15 @@ export const reservationsConfig: ScreenConfig = {
 
 export const groupsConfig: ScreenConfig = {
   doctype: "Group Booking",
-  dateFilter: { field: "check_in_date", label: "Arrival" },
+  dateFilter: {
+    field: "check_in_date",
+    label: "Check-in date",
+    fields: [
+      { field: "check_in_date", label: "Check-in date" },
+      { field: "cutoff_date", label: "Cutoff date" },
+      { field: "creation", label: "Booking date" },
+    ],
+  },
   title: "Groups & Blocks",
   description: "Group Rooms Control - blocks, pickup and rooming lists.",
   propertyScoped: true,

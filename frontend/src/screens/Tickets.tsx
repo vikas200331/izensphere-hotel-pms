@@ -15,6 +15,7 @@ import {
 } from "../components/ui/card"
 import { cn } from "../lib/utils"
 import { useT, t as translate } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 
 type View = "open" | "mine" | "unassigned" | "overdue" | "resolved" | "all"
@@ -328,6 +329,9 @@ export default function Tickets() {
   const [priority, setPriority] = useState("")
   const [q, setQ] = useState("")
   const [older, setOlder] = useState(0)
+  const [dateField, setDateField] = useState("creation")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
   const [staff, setStaff] = useState<Staff[]>([])
   const [selected, setSelected] = useState<string | null>(params.get("ticket"))
   const [creating, setCreating] = useState(false)
@@ -347,13 +351,16 @@ export default function Tickets() {
       priority: priority || undefined,
       q: q || undefined,
       older_than_days: older || undefined,
+      from_date: fromDate || undefined,
+      to_date: toDate || undefined,
+      date_field: dateField || undefined,
     })
       .then((r) => {
         setRows(r.tickets)
         setCounts(r.counts)
       })
       .catch((e) => setError(serverError(e)))
-  }, [view, category, priority, q, older])
+  }, [view, category, priority, q, older, fromDate, toDate, dateField])
 
   useEffect(() => {
     const h = setTimeout(load, q ? 250 : 0)
@@ -471,6 +478,26 @@ export default function Tickets() {
             <option value={7}>{t("Open for over 7 days")}</option>
             <option value={30}>{t("Open for over 30 days")}</option>
           </select>
+        </div>
+
+        <div className="mb-4">
+          <DateFilterBar
+            mode="range"
+            fromDate={fromDate}
+            toDate={toDate}
+            onRangeChange={(from, to) => {
+              setFromDate(from)
+              setToDate(to)
+            }}
+            selectedField={dateField}
+            fieldOptions={[
+              { id: "creation", label: "Created date" },
+              { id: "due_by", label: "Due date" },
+              { id: "resolved_on", label: "Resolved date" },
+            ]}
+            onFieldChange={setDateField}
+            compact
+          />
         </div>
 
         <ul className="divide-y divide-zinc-100">

@@ -3122,7 +3122,8 @@ def gstr1_rows(from_date: str, to_date: str, property: str | None = None):
 
 @frappe.whitelist()
 @require_roles("Front Desk", "Kamra Agent")
-def guests_with_stats(search: str | None = None):
+def guests_with_stats(search: str | None = None, from_date: str | None = None,
+                      to_date: str | None = None, date_field: str = "last_stay"):
 	"""Guest list with stay stats - the CRM index."""
 	from izensphere_stay_and_dine.authz import guest_scope_sql
 	scope_sql, params = guest_scope_sql("g")
@@ -3132,6 +3133,28 @@ def guests_with_stats(search: str | None = None):
 	if search:
 		where += " AND (g.full_name LIKE %(q)s OR g.phone LIKE %(q)s)"
 		params["q"] = f"%{search}%"
+
+	having_clause = ""
+	if from_date or to_date:
+		if date_field == "registered":
+			if from_date:
+				where += " AND g.creation >= %(from_date)s"
+				params["from_date"] = f"{from_date} 00:00:00"
+			if to_date:
+				where += " AND g.creation <= %(to_date)s"
+				params["to_date"] = f"{to_date} 23:59:59"
+		else:
+			# Default: last_stay date filter
+			having_conds = []
+			if from_date:
+				having_conds.append("MAX(r.check_in_date) >= %(from_date)s")
+				params["from_date"] = from_date
+			if to_date:
+				having_conds.append("MAX(r.check_in_date) <= %(to_date)s")
+				params["to_date"] = to_date
+			if having_conds:
+				having_clause = f"HAVING {' AND '.join(having_conds)}"
+
 	return frappe.db.sql(  # nosemgrep: frappe-sql-format-injection -- values are parameterized; interpolated text is a constant or whitelisted identifier, not user input
 		f"""
 		SELECT
@@ -3145,6 +3168,7 @@ def guests_with_stats(search: str | None = None):
 		LEFT JOIN `tabReservation` r ON r.guest = g.name{join_scope}
 		{where}
 		GROUP BY g.name
+		{having_clause}
 		ORDER BY lifetime_value DESC, g.modified DESC
 		LIMIT 200
 		""",
@@ -3594,16 +3618,9 @@ def _stay_balance(reservation: str) -> dict:
 def front_desk_snapshot(property: str | None = None, date: str | None = None):
 	"""Everything the front desk needs for one day, in one call."""
 	date = date or nowdate()
+	today = nowdate()
 
-	res_filters = {"check_in_date": date, "status": "Confirmed"}
-	dep_filters = {"check_out_date": date, "status": "Checked In"}
-	inh_filters = {"status": "Checked In"}
-	room_filters = {}
 	scope = property or _property_scope()
-	if scope:
-		for flt in (res_filters, dep_filters, inh_filters, room_filters):
-			flt["property"] = scope
-
 	res_fields = [
 		"name", "guest_name", "room_type", "room", "status", "source",
 		"check_in_date", "check_out_date", "nights", "adults", "children",
@@ -3611,6 +3628,24 @@ def front_desk_snapshot(property: str | None = None, date: str | None = None):
 		"precheckin_token", "booked_by_name", "booked_by_phone",
 		"booker_relation", "contact_preference", "company",
 	]
+
+	# Date-aware arrivals
+	if date < today:
+		arr_statuses = ["Checked In", "Checked Out"]
+	else:
+		arr_statuses = ["Confirmed", "Checked In"]
+	res_filters = {"check_in_date": date, "status": ("in", arr_statuses)}
+	if scope:
+		res_filters["property"] = scope
+
+	# Date-aware departures
+	if date < today:
+		dep_statuses = ["Checked Out"]
+	else:
+		dep_statuses = ["Checked In", "Checked Out"]
+	dep_filters = {"check_out_date": date, "status": ("in", dep_statuses)}
+	if scope:
+		dep_filters["property"] = scope
 
 	arrivals = frappe.get_all(
 		"Reservation", filters=res_filters, fields=res_fields,
@@ -3620,18 +3655,50 @@ def front_desk_snapshot(property: str | None = None, date: str | None = None):
 		"Reservation", filters=dep_filters, fields=res_fields,
 		order_by="creation asc",
 	)
-	in_house = frappe.get_all(
-		"Reservation", filters=inh_filters, fields=res_fields,
-		order_by="room asc",
-	)
+
+	# Date-aware in-house
+	if date == today:
+		inh_filters = {"status": "Checked In"}
+		if scope:
+			inh_filters["property"] = scope
+		in_house = frappe.get_all(
+			"Reservation", filters=inh_filters, fields=res_fields,
+			order_by="room asc",
+		)
+	else:
+		inh_conds = [
+			"check_in_date <= %(date)s",
+			"check_out_date > %(date)s",
+			"status NOT IN ('Cancelled', 'No Show')",
+		]
+		inh_params = {"date": date}
+		if scope:
+			inh_conds.append("property = %(property)s")
+			inh_params["property"] = scope
+		if date < today:
+			inh_conds.append("status IN ('Checked In', 'Checked Out')")
+		else:
+			inh_conds.append("status IN ('Confirmed', 'Checked In')")
+		in_house = frappe.db.sql(
+			f"""SELECT {', '.join(res_fields)} FROM `tabReservation`
+			WHERE {' AND '.join(inh_conds)}
+			ORDER BY room asc""",
+			inh_params,
+			as_dict=True,
+		)
 
 	# payment state per stay - the same rules as the reservation drawer
 	all_rows = arrivals + departures + in_house
-	money = _stay_balances([r.name for r in all_rows])
+	money = _stay_balances([r.name if hasattr(r, "name") else r["name"] for r in all_rows])
 	for r in all_rows:
-		m = money.get(r.name) or {}
+		r_name = r.name if hasattr(r, "name") else r["name"]
+		m = money.get(r_name) or {}
 		r["paid_total"] = m.get("paid", 0.0)
 		r["balance_due"] = m.get("due", 0.0)
+
+	room_filters = {}
+	if scope:
+		room_filters["property"] = scope
 	rooms = frappe.get_all(
 		"Room",
 		filters=room_filters,
@@ -3641,6 +3708,11 @@ def front_desk_snapshot(property: str | None = None, date: str | None = None):
 		],
 		order_by="room_number asc",
 	)
+
+	if date != today:
+		occupied_rooms = {r.get("room") for r in in_house if r.get("room")}
+		for rm in rooms:
+			rm["occupancy_status"] = "Occupied" if rm["name"] in occupied_rooms else "Vacant"
 
 	minutes = frappe.db.sql(
 		"""
@@ -4942,26 +5014,54 @@ def set_housekeeping_status(room: str, status: str):
 
 @frappe.whitelist()
 @require_roles(HK_SUPERVISOR, "Front Desk", "Kamra Agent")
-def room_board(property: str):
+def room_board(property: str, date: str | None = None):
 	"""Every room at a glance for the housekeeping supervisor: status,
 	occupancy, who is in it, and its open task - the board the desk has,
 	inside the Housekeeping module (#99)."""
 	from izensphere_stay_and_dine.crs import assert_property_access
 	assert_property_access(property)
+	date = date or nowdate()
+	today = nowdate()
+
 	rooms = frappe.get_all(
 		"Room", filters={"property": property},
 		fields=["name", "room_number", "room_type", "floor",
 		        "housekeeping_status", "occupancy_status"],
 		order_by="room_number asc",
 	)
-	in_house = {
-		r.room: r for r in frappe.get_all(
+	if date == today:
+		in_house_rows = frappe.get_all(
 			"Reservation",
 			filters={"property": property, "status": "Checked In",
 			         "room": ("is", "set")},
 			fields=["room", "guest_name", "check_out_date", "is_day_use",
-			        "planned_check_out_time"])}
-	due_out = str(nowdate())
+			        "planned_check_out_time"])
+	else:
+		inh_conds = [
+			"property = %(property)s",
+			"room IS NOT NULL AND room != ''",
+			"check_in_date <= %(date)s",
+			"check_out_date >= %(date)s",
+			"status NOT IN ('Cancelled', 'No Show')",
+		]
+		params = {"property": property, "date": date}
+		if date < today:
+			inh_conds.append("status IN ('Checked In', 'Checked Out')")
+		else:
+			inh_conds.append("status IN ('Confirmed', 'Checked In')")
+		in_house_rows = frappe.db.sql(
+			f"""SELECT room, guest_name, check_out_date, is_day_use, planned_check_out_time
+			FROM `tabReservation` WHERE {' AND '.join(inh_conds)}""",
+			params, as_dict=True
+		)
+
+	in_house = {
+		(r["room"] if isinstance(r, dict) else r.room): (
+			r if isinstance(r, dict) else frappe._dict(r)
+		)
+		for r in in_house_rows
+	}
+	due_out = str(date)
 	tasks = {}
 	for t in frappe.get_all(
 			"Housekeeping Task",
@@ -4977,12 +5077,32 @@ def room_board(property: str):
 		fields=["name", "full_name"])} if tasks else {}
 	for r in rooms:
 		stay = in_house.get(r.name)
-		r["guest_name"] = stay.guest_name if stay else None
-		r["due_out"] = bool(stay and str(stay.check_out_date) <= due_out)
+		if date != today:
+			r["occupancy_status"] = "Occupied" if stay else "Vacant"
+		r["guest_name"] = (
+			stay.get("guest_name")
+			if isinstance(stay, dict)
+			else getattr(stay, "guest_name", None)
+		) if stay else None
+		check_out_val = (
+			stay.get("check_out_date")
+			if isinstance(stay, dict)
+			else getattr(stay, "check_out_date", None)
+		) if stay else None
+		r["due_out"] = bool(stay and str(check_out_val or "") <= due_out)
 		# a day-use room turns the same day: housekeeping plans on its slot
-		r["day_use"] = bool(stay and stay.is_day_use)
-		r["etd"] = str(stay.planned_check_out_time)[:5] \
-			if stay and stay.planned_check_out_time else None
+		is_day_use_val = (
+			stay.get("is_day_use")
+			if isinstance(stay, dict)
+			else getattr(stay, "is_day_use", 0)
+		) if stay else 0
+		r["day_use"] = bool(stay and is_day_use_val)
+		etd_val = (
+			stay.get("planned_check_out_time")
+			if isinstance(stay, dict)
+			else getattr(stay, "planned_check_out_time", None)
+		) if stay else None
+		r["etd"] = str(etd_val)[:5] if etd_val else None
 		t = tasks.get(r.name)
 		r["task"] = {
 			"name": t.name, "type": t.task_type, "status": t.status,

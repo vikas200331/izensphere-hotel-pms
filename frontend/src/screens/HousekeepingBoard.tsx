@@ -11,6 +11,7 @@ import { Button } from "../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { cn } from "../lib/utils"
 import { useT, t as translate } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 
 // Ready: passed its inspection when the turnover profile requires one
@@ -61,6 +62,7 @@ type Filter = "All" | HkStatus | "Due out" | "Has task"
 
 export default function HousekeepingBoard() {
   const { t } = useT()
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [rooms, setRooms] = useState<BoardRoom[] | null>(null)
   const [canSupervise, setCanSupervise] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -74,6 +76,7 @@ export default function HousekeepingBoard() {
   const load = useCallback(() => {
     call<{ rooms: BoardRoom[]; can_supervise: boolean }>("izensphere_stay_and_dine.api.room_board", {
       property: getCurrentProperty(),
+      date: date || undefined,
     })
       .then((d) => {
         setRooms(d.rooms)
@@ -81,7 +84,7 @@ export default function HousekeepingBoard() {
         setError(null)
       })
       .catch((e) => setError(serverError(e)))
-  }, [])
+  }, [date])
 
   useEffect(() => {
     load()
@@ -169,6 +172,13 @@ export default function HousekeepingBoard() {
           {translate(error)}
         </div>
       )}
+
+      <DateFilterBar
+        mode="single"
+        date={date}
+        onDateChange={setDate}
+        label="Date"
+      />
 
       <div className="flex flex-wrap gap-2" role="toolbar" aria-label={t("Filter rooms")}>
         {(

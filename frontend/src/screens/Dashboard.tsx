@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { StatCard } from "../components/ui/stat-card"
 import { cur, moneyLocale } from "../lib/money"
 import { useT, t as translate, useUILanguage } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 
 const inr = (n: unknown) =>
@@ -113,6 +114,7 @@ function Tile({ icon: Icon, label, value, sub, tone }: {
 export default function Dashboard() {
   const { t } = useT()
   const [scope, setScope] = useState<"property" | "portfolio">("property")
+  const [date, setDate] = useState(() => new Date().toLocaleDateString("en-CA"))
   const [multi, setMulti] = useState(false)
   const [prop, setProp] = useState<PropDash | null>(null)
   const [port, setPort] = useState<Portfolio | null>(null)
@@ -129,6 +131,7 @@ export default function Dashboard() {
     if (scope === "property") {
       call<PropDash & { figures_hidden?: boolean }>("izensphere_stay_and_dine.dashboards.property_dashboard", {
         property: getCurrentProperty(),
+        date,
         with_comparison: 1,
       }).then((d) => d.figures_hidden
         ? setError(t("The revenue dashboard is for Finance, Revenue and managers."))
@@ -137,7 +140,7 @@ export default function Dashboard() {
       call<Portfolio>("izensphere_stay_and_dine.dashboards.portfolio_dashboard", {})
         .then(setPort).catch((e) => setError(serverError(e)))
     }
-  }, [scope, t])
+  }, [scope, date, t])
   useEffect(load, [load])
   useRealtime(load)
 
@@ -148,29 +151,40 @@ export default function Dashboard() {
           <h1 className="text-xl font-semibold text-zinc-900">{t("Revenue Dashboard")}</h1>
           <p className="text-xs text-zinc-500">
             {scope === "property"
-              ? t("Today at this property, by department.")
+              ? t("Operations & figures at this property, by department.")
               : t("The whole portfolio at a glance.")}
           </p>
         </div>
-        <Link to="/owner" className="text-sm font-medium text-brand-700 sm:hidden">
-          {t("Owner view")}
-        </Link>
-        {multi && (
-          <div className="flex rounded-lg border border-zinc-200 bg-white p-0.5 text-sm">
-            {(["property", "portfolio"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setScope(s)}
-                className={
-                  "rounded-md px-3 py-1.5 font-medium " +
-                  (scope === s ? "bg-brand-600 text-white" : "text-zinc-600")
-                }
-              >
-                {s === "property" ? t("This property") : t("All properties")}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {scope === "property" && (
+            <DateFilterBar
+              mode="single"
+              date={date}
+              onDateChange={setDate}
+              label={t("Date")}
+              compact
+            />
+          )}
+          <Link to="/owner" className="text-sm font-medium text-brand-700 sm:hidden">
+            {t("Owner view")}
+          </Link>
+          {multi && (
+            <div className="flex rounded-lg border border-zinc-200 bg-white p-0.5 text-sm">
+              {(["property", "portfolio"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setScope(s)}
+                  className={
+                    "rounded-md px-3 py-1.5 font-medium " +
+                    (scope === s ? "bg-brand-600 text-white" : "text-zinc-600")
+                  }
+                >
+                  {s === "property" ? t("This property") : t("All properties")}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (

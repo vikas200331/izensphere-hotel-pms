@@ -42,6 +42,7 @@ import RoomDrawer, { type RoomTab } from "../components/RoomDrawer"
 import RoomChangeDialog from "../components/RoomChangeDialog"
 import CustomizeToday from "../components/CustomizeToday"
 import OpenTasksCard from "../components/OpenTasksCard"
+import DateFilterBar from "../components/DateFilterBar"
 import {
   cachedLayout,
   DEFAULT_TODAY_LAYOUT,
@@ -477,6 +478,7 @@ export default function Today() {
   const { t, lang } = useT()
   const { refreshKey } = useOutletContext<ShellContext>()
   const navigate = useNavigate()
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [snap, setSnap] = useState<Snapshot | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [kpi, setKpi] = useState<any>(null)
@@ -508,10 +510,13 @@ export default function Today() {
 
   const refresh = useCallback(async () => {
     try {
+      const today = new Date().toISOString().slice(0, 10)
+      const isHistoricalOrFuture = date && date !== today
       const [s, k] = await Promise.all([
-        getSnapshot(),
+        getSnapshot(isHistoricalOrFuture ? date : undefined),
         call("izensphere_stay_and_dine.dashboards.property_dashboard", {
           property: getCurrentProperty(),
+          date: isHistoricalOrFuture ? date : undefined,
         }).catch(() => null),
       ])
       setSnap(s)
@@ -520,7 +525,7 @@ export default function Today() {
     } catch (e) {
       setError(serverError(e))
     }
-  }, [])
+  }, [date])
 
   useEffect(() => {
     refresh()
@@ -762,14 +767,6 @@ export default function Today() {
   const hh = new Date().getHours()
   const greeting =
     hh < 12 ? t("Good morning") : hh < 17 ? t("Good afternoon") : t("Good evening")
-  const prettyDate = snap?.date
-    ? new Date(snap.date + "T00:00:00").toLocaleDateString(uiDateLocale(undefined), {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : ""
 
   // Today is a set of widgets; each person picks which show and in what
   // order (Customize). The built-in layout is the classic Today.
@@ -1028,10 +1025,13 @@ export default function Today() {
             {greeting}. {t("Here's what's happening today.")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium tabular-nums text-zinc-600">
-            {prettyDate}
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <DateFilterBar
+            mode="single"
+            date={date}
+            onDateChange={setDate}
+            label="Date"
+          />
           <Button
             variant="outline"
             disabled={!layoutInfo}

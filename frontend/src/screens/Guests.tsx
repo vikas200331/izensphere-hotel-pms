@@ -5,6 +5,7 @@ import { call } from "../lib/api"
 import { Badge } from "../components/ui/badge"
 import { cur, moneyLocale } from "../lib/money"
 import { useT } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 import {
   Card,
   CardContent,
@@ -70,6 +71,9 @@ export default function Guests() {
   const on = (id: ColId) => !hidden.has(id)
   const [rows, setRows] = useState<GuestRow[]>([])
   const [search, setSearch] = useState("")
+  const [dateField, setDateField] = useState("last_stay")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
   const [page, setPage] = useState(0)
   const PAGE = 25
   const navigate = useNavigate()
@@ -78,13 +82,16 @@ export default function Guests() {
     const timer = setTimeout(() => {
       call<GuestRow[]>("izensphere_stay_and_dine.api.guests_with_stats", {
         search: search || undefined,
+        from_date: fromDate || undefined,
+        to_date: toDate || undefined,
+        date_field: dateField || undefined,
       }).then((r) => {
         setRows(r)
         setPage(0)
       })
     }, 250)
     return () => clearTimeout(timer)
-  }, [search])
+  }, [search, fromDate, toDate, dateField])
 
   const visible = rows.slice(page * PAGE, page * PAGE + PAGE)
 
@@ -169,6 +176,24 @@ export default function Guests() {
         </div>
         </div>
       </CardHeader>
+      <div className="border-b border-zinc-100 px-6 pb-3">
+        <DateFilterBar
+          mode="range"
+          fromDate={fromDate}
+          toDate={toDate}
+          onRangeChange={(from, to) => {
+            setFromDate(from)
+            setToDate(to)
+          }}
+          selectedField={dateField}
+          fieldOptions={[
+            { id: "last_stay", label: "Last stay date" },
+            { id: "registered", label: "Registered date" },
+          ]}
+          onFieldChange={setDateField}
+          compact
+        />
+      </div>
       <CardContent>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

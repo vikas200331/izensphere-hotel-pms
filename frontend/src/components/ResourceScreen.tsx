@@ -26,6 +26,7 @@ import ImageField from "./ImageField"
 import { fmtAmount } from "../lib/money"
 import { useT, t as translate, useUILanguage } from "../lib/i18n"
 import { useAuth } from "../lib/auth"
+import DateFilterBar from "./DateFilterBar"
 
 const BACKDATE_ROLES = ["Finance", "Hotel Admin", "System Manager", "Administrator"]
 
@@ -96,7 +97,11 @@ export interface ScreenConfig {
   /** Rows per page (adds pagination when set). */
   pageSize?: number
   /** Date-range filter on this date field (adds From/To pickers). */
-  dateFilter?: { field: string; label: string }
+  dateFilter?: {
+    field: string
+    label: string
+    fields?: { field: string; label: string }[]
+  }
   /** Custom section rendered in the drawer below the form (existing rows only). */
   extra?: ComponentType<{ row: Row; reload: () => void }>
   /** Replace the generic edit form with a bespoke detail panel (existing rows).
@@ -377,9 +382,16 @@ export function ResourceScreen({
   const visibleCols = config.columns.filter((c) => !hiddenCols.has(c.field))
   const [debounced, setDebounced] = useState("")
   const [filterVals, setFilterVals] = useState<Record<string, string>>({})
+  const [dateField, setDateField] = useState(config.dateFilter?.field || "")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [page, setPage] = useState(0)
+
+  useEffect(() => {
+    setDateField(config.dateFilter?.field || "")
+    setDateFrom("")
+    setDateTo("")
+  }, [config.doctype, config.dateFilter?.field])
 
   const pageSize = config.pageSize ?? 0
 
@@ -394,7 +406,7 @@ export function ResourceScreen({
   }, [search])
 
   // any search/filter change resets to the first page
-  useEffect(() => setPage(0), [debounced, filterVals, dateFrom, dateTo])
+  useEffect(() => setPage(0), [debounced, filterVals, dateField, dateFrom, dateTo])
 
   const load = useCallback(() => {
     const filters: (string | number)[][] = []
@@ -402,9 +414,17 @@ export function ResourceScreen({
       filters.push(["property", "=", getCurrentProperty()])
     for (const [field, val] of Object.entries(filterVals))
       if (val) filters.push([field, "=", val])
-    if (config.dateFilter?.field) {
-      if (dateFrom) filters.push([config.dateFilter.field, ">=", dateFrom])
-      if (dateTo) filters.push([config.dateFilter.field, "<=", dateTo])
+    const activeDateField = dateField || config.dateFilter?.field
+    if (activeDateField) {
+      if (dateFrom) filters.push([activeDateField, ">=", dateFrom])
+      if (dateTo) {
+        const isDatetime =
+          activeDateField === "creation" ||
+          activeDateField.endsWith("_at") ||
+          activeDateField.endsWith("_on") ||
+          activeDateField === "due_by"
+        filters.push([activeDateField, "<=", isDatetime ? `${dateTo} 23:59:59` : dateTo])
+      }
     }
     const orFilters =
       debounced && config.searchFields?.length
@@ -450,9 +470,17 @@ export function ResourceScreen({
       filters.push(["property", "=", getCurrentProperty()])
     for (const [field, val] of Object.entries(filterVals))
       if (val) filters.push([field, "=", val])
-    if (config.dateFilter?.field) {
-      if (dateFrom) filters.push([config.dateFilter.field, ">=", dateFrom])
-      if (dateTo) filters.push([config.dateFilter.field, "<=", dateTo])
+    const activeDateField = dateField || config.dateFilter?.field
+    if (activeDateField) {
+      if (dateFrom) filters.push([activeDateField, ">=", dateFrom])
+      if (dateTo) {
+        const isDatetime =
+          activeDateField === "creation" ||
+          activeDateField.endsWith("_at") ||
+          activeDateField.endsWith("_on") ||
+          activeDateField === "due_by"
+        filters.push([activeDateField, "<=", isDatetime ? `${dateTo} 23:59:59` : dateTo])
+      }
     }
     const orFilters =
       debounced && config.searchFields?.length
@@ -627,35 +655,27 @@ export function ResourceScreen({
               </select>
             ))}
             {config.dateFilter && (
-              <div className="flex items-center gap-1.5 text-sm text-zinc-500">
-                <span className="text-xs">{t(config.dateFilter.label)}</span>
-                <input
-                  type="date"
-                  aria-label={(`${t(config.dateFilter.label)} ${t("from")}`)}
-                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                />
-                <span className="text-xs">{t("to")}</span>
-                <input
-                  type="date"
-                  aria-label={(`${t(config.dateFilter.label)} ${t("to")}`)}
-                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                />
-                {(dateFrom || dateTo) && (
-                  <button
-                    className="text-xs text-zinc-400 hover:text-zinc-600"
-                    onClick={() => {
-                      setDateFrom("")
-                      setDateTo("")
-                    }}
-                  >
-                    {t("Clear")}
-                  </button>
-                )}
-              </div>
+              <DateFilterBar
+                mode="range"
+                fromDate={dateFrom}
+                toDate={dateTo}
+                onRangeChange={(from, to) => {
+                  setDateFrom(from)
+                  setDateTo(to)
+                  setPage(0)
+                }}
+                selectedField={dateField || config.dateFilter.field}
+                fieldOptions={
+                  config.dateFilter.fields && config.dateFilter.fields.length > 0
+                    ? config.dateFilter.fields.map((f) => ({ id: f.field, label: f.label }))
+                    : [{ id: config.dateFilter.field, label: config.dateFilter.label }]
+                }
+                onFieldChange={(f) => {
+                  setDateField(f)
+                  setPage(0)
+                }}
+                compact
+              />
             )}
             <div className="relative ml-auto flex items-center gap-2">
               <button

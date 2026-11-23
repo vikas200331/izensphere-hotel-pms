@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
 import { moneyLocale } from "../lib/money"
 import { t as translate, useUILanguage } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 const inr = (n: unknown) =>
   Number(n ?? 0).toLocaleString(moneyLocale(), { maximumFractionDigits: 0 })
@@ -98,26 +99,17 @@ export default function FolioHistory() {
             <option value="Open">{translate("Open")}</option>
             <option value="Closed">{translate("Closed")}</option>
           </select>
-          <label className="flex items-center gap-1 text-xs text-zinc-500">
-            {translate("Closed from")}
-            <input
-              type="date"
-              className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-            />
-          </label>
-          <label className="flex items-center gap-1 text-xs text-zinc-500">
-            {translate("To")}
-            <input
-              type="date"
-              className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-              value={toDate}
-              min={fromDate || undefined}
-              disabled={!fromDate}
-              onChange={(e) => setToDate(e.target.value)}
-            />
-          </label>
+          <DateFilterBar
+            mode="range"
+            fromDate={fromDate}
+            toDate={toDate}
+            onRangeChange={(from, to) => {
+              setFromDate(from)
+              setToDate(to)
+            }}
+            label={translate("Closed on")}
+            compact
+          />
           <Button
             variant="outline"
             disabled={!selected.length || busy}
