@@ -59,15 +59,34 @@ export interface BoardRoom {
   } | null
 }
 
+export interface RoomsSummary {
+  total: number
+  available: number
+  occupied: number
+  arrivals: number
+  departures: number
+  dirty: number
+  clean: number
+  inspected: number
+  cleaning: number
+  maintenance: number
+  out_of_service: number
+}
+
 export interface RoomsBoard {
   date: string
+  today?: string
   rooms: BoardRoom[]
   room_types: { name: string; room_type_name: string }[]
+  summary?: RoomsSummary
   can: RoomPermissions
 }
 
-export const getRoomsBoard = () =>
-  call<RoomsBoard>("izensphere_stay_and_dine.rooms.rooms_board", { property: getCurrentProperty() })
+export const getRoomsBoard = (date?: string) =>
+  call<RoomsBoard>("izensphere_stay_and_dine.rooms.rooms_board", {
+    property: getCurrentProperty(),
+    date: date || undefined,
+  })
 
 export interface RoomDetail {
   date: string
