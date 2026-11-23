@@ -158,7 +158,21 @@ export default function Ledgers() {
         {inBalance === null ? (
           translate("Ledgers as of {v0}. Debits {v1} · credits {v2}. The check against folio balances runs for the current business date.", { v0: String(date), v1: String(inr(totals.debit)), v2: String(inr(totals.credit)) })
         ) : inBalance ? (
-          translate("Ledgers agree with folios - Guest + Deposit net {v0} equals the {v1} folios carry. Debits exceed credits by what guests owe ({v2}); that is not an imbalance.", { v0: String(inr(recon?.ledger_net)), v1: String(inr(recon?.folios_net)), v2: String(inr(totals.debit - totals.credit)) })
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="font-semibold text-emerald-900">
+                {translate("All ledgers in balance")}
+              </p>
+              <p className="mt-0.5 text-xs text-emerald-700">
+                {translate("Guest and Deposit ledgers match active folio balances exactly (net {v0}).", {
+                  v0: inr(recon?.ledger_net),
+                })}
+              </p>
+            </div>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+              {translate("Reconciled")}
+            </span>
+          </div>
         ) : (
           <div>
             <p className="font-medium">
