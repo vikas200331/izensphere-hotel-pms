@@ -123,6 +123,12 @@ website_redirects = [
 	{"source": r"/stay/(.*)", "target": r"/izensphere-stay-and-dine/stay/\1"},
 	{"source": r"/hk$", "target": "/izensphere-stay-and-dine/hk"},
 	{"source": r"/checkin/(.*)", "target": r"/izensphere-stay-and-dine/checkin/\1"},
+	{"source": r"/room-board$", "target": "/izensphere-stay-and-dine/room-board"},
+	{"source": r"/room-board/(.*)", "target": r"/izensphere-stay-and-dine/room-board/\1"},
+	{"source": r"/housekeeping-board$", "target": "/izensphere-stay-and-dine/housekeeping-board"},
+	{"source": r"/housekeeping$", "target": "/izensphere-stay-and-dine/housekeeping"},
+	{"source": r"/lost-found$", "target": "/izensphere-stay-and-dine/lost-found"},
+	{"source": r"/lost-and-found$", "target": "/izensphere-stay-and-dine/lost-found"},
 ]
 
 # Each item in the list will be shown as an app in the apps page
