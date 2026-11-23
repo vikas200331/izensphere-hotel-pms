@@ -23,6 +23,7 @@ export const FEATURES: FeatureEntry[] = [
   { label: "Refund a payment", to: "/billing", where: "Finance · Billing", keywords: ["credit note", "reverse", "chargeback"] },
   { label: "Print an invoice", to: "/billing", where: "Finance · Billing", keywords: ["gst invoice", "tax invoice", "reprint", "bill"] },
   { label: "Change a room rate", to: "/rate-plans", where: "Revenue · Rate Plans", keywords: ["bar", "best available rate", "base price", "rack rate", "tariff", "pricing"] },
+  { label: "Hotel cancellation policies", to: "/cancellation-policies", where: "Revenue · Cancellation Policies", keywords: ["cancellation policy", "refund rules", "deadline", "cancellation fee", "hotel policy"] },
   { label: "Seasonal pricing", to: "/seasons", where: "Revenue · Seasons", keywords: ["peak", "weekend rate", "festival", "date range", "bar"] },
   { label: "Move a guest to another room", to: "/", where: "Front Desk · Today", keywords: ["room change", "upgrade", "downgrade", "swap room"] },
   { label: "Extend a stay", to: "/reservations", where: "Front Desk · Reservations", keywords: ["late checkout", "change dates", "amend"] },

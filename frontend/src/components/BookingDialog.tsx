@@ -920,12 +920,14 @@ export function BookingDialog(props: {
   // a window that has already closed reads as non-refundable, never as a
   // "free until" date in the past
   const cancelText = (() => {
-    const c = quote?.cancellation
+    const c = (quote?.cancellation as any)
     if (!c) return ""
     if (c.non_refundable_season)
       return t("Non-refundable dates ({season}): the full stay is charged on cancellation.", {
         season: c.non_refundable_season,
       })
+    if (c.policy_description)
+      return c.policy_description
     if (!c.free_now)
       return t("Non-refundable from now: {fee} is charged on cancellation.", {
         fee: c.fee_label,

@@ -28,6 +28,14 @@ interface Preview {
   inside_window: boolean
   fee_basis: string
   estimated_fee: number
+  eligible_refund?: number
+  amount_paid?: number
+  booking_amount?: number
+  cancellation_policy?: string
+  cancellation_policy_type?: string
+  cancellation_deadline?: string
+  policy_description?: string
+  allow_hotel_cancellation_waiver?: number
 }
 
 const inr = (n: number) =>
@@ -40,9 +48,16 @@ export default function CancelPanel({ row, reload }: { row: Row; reload: () => v
   const [reason, setReason] = useState(REASONS[0])
   const [note, setNote] = useState("")
   const [waive, setWaive] = useState(false)
+  const [issueCreditNote, setIssueCreditNote] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<{ cancellation_number: string; fee: number } | null>(null)
+  const [done, setDone] = useState<{
+    cancellation_number: string
+    fee: number
+    eligible_refund?: number
+    refund_status?: string
+    credit_note_voucher?: string
+  } | null>(null)
 
   useEffect(() => {
     if (open && !preview)
@@ -67,6 +82,21 @@ export default function CancelPanel({ row, reload }: { row: Row; reload: () => v
                 amount: `${cur()}${inr(done.fee)}`,
               })
             : t("No fee applied.")}{" "}
+          {done.eligible_refund && done.eligible_refund > 0 ? (
+            <span className="font-semibold text-emerald-950">
+              · {t("Eligible refund: {amount} ({status})", {
+                amount: `${cur()}${inr(done.eligible_refund)}`,
+                status: done.refund_status || "Pending",
+              })}
+            </span>
+          ) : null}
+        </p>
+        {done.credit_note_voucher && (
+          <p className="mt-1 text-xs font-mono text-emerald-900">
+            {t("Credit voucher: {code}", { code: done.credit_note_voucher })}
+          </p>
+        )}
+        <p className="mt-1 text-xs text-emerald-700">
           {t("Give the guest the cancellation number.")}
         </p>
         <Link
@@ -87,23 +117,39 @@ export default function CancelPanel({ row, reload }: { row: Row; reload: () => v
       ) : (
         <div className="space-y-3">
           {preview && (
-            <p className="rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-600">
-              {t("{n} day{s} before arrival.", {
-                n: preview.days_before_arrival,
-                s: preview.days_before_arrival === 1 ? "" : "s",
-              })}{" "}
-              {preview.inside_window && preview.fee_basis !== "None" ? (
-                <>
-                  {t("Inside the {days}-day window - the {basis} ({amount}) will be charged.", {
-                    days: preview.free_cancel_days,
-                    basis: preview.fee_basis.toLowerCase(),
-                    amount: `${cur()}${inr(preview.estimated_fee)}`,
-                  })}
-                </>
-              ) : (
-                t("Outside the fee window - cancellation is free.")
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3.5 text-xs text-zinc-700 space-y-2">
+              <div className="flex items-center justify-between font-semibold text-zinc-900">
+                <span>{preview.cancellation_policy_type || t("Hotel Policy")}</span>
+                <span>{preview.inside_window ? t("Penalty Applies") : t("Free Cancellation Window")}</span>
+              </div>
+              <p className="leading-relaxed text-zinc-600">
+                {preview.policy_description ||
+                  (preview.inside_window && preview.fee_basis !== "None"
+                    ? t("Cancellation fee applies after deadline.")
+                    : t("Cancellation is free before the deadline."))}
+              </p>
+              {preview.cancellation_deadline && (
+                <p className="text-[11px] text-zinc-500">
+                  {t("Free cancellation deadline")}: <b className="font-mono text-zinc-800">{preview.cancellation_deadline}</b>
+                </p>
               )}
-            </p>
+              <div className="grid grid-cols-3 gap-2 border-t border-zinc-200/80 pt-2 text-center text-[11px]">
+                <div className="rounded-lg bg-white p-2 border border-zinc-100">
+                  <span className="block text-zinc-400">{t("Amount Paid")}</span>
+                  <span className="font-semibold text-zinc-900">{cur()}{inr(preview.amount_paid || 0)}</span>
+                </div>
+                <div className="rounded-lg bg-white p-2 border border-zinc-100">
+                  <span className="block text-zinc-400">{t("Cancel Fee")}</span>
+                  <span className={`font-semibold ${preview.estimated_fee > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {cur()}{inr(preview.estimated_fee)}
+                  </span>
+                </div>
+                <div className="rounded-lg bg-white p-2 border border-zinc-100">
+                  <span className="block text-zinc-400">{t("Eligible Refund")}</span>
+                  <span className="font-semibold text-emerald-700">{cur()}{inr(preview.eligible_refund || 0)}</span>
+                </div>
+              </div>
+            </div>
           )}
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-zinc-600">
@@ -136,6 +182,17 @@ export default function CancelPanel({ row, reload }: { row: Row; reload: () => v
               {t("Waive the fee (logged - manager's call)")}
             </label>
           )}
+          {preview && (preview.eligible_refund || 0) > 0 && (
+            <label className="flex items-center gap-2 text-sm text-zinc-600">
+              <input
+                type="checkbox"
+                className="size-4 accent-brand-600"
+                checked={issueCreditNote}
+                onChange={(e) => setIssueCreditNote(e.target.checked)}
+              />
+              {t("Issue credit note voucher instead of cash/bank refund")}
+            </label>
+          )}
           <div className="flex items-center gap-2">
             <Button
               disabled={busy}
@@ -146,11 +203,15 @@ export default function CancelPanel({ row, reload }: { row: Row; reload: () => v
                   const out = await call<{
                     cancellation_number: string
                     fee: number
+                    eligible_refund?: number
+                    refund_status?: string
+                    credit_note_voucher?: string
                   }>("izensphere_stay_and_dine.api.cancel_reservation", {
                     reservation: row.name,
                     reason,
                     note: note || undefined,
                     waive_fee: waive ? 1 : 0,
+                    issue_credit_note: issueCreditNote ? 1 : 0,
                   })
                   setDone(out)
                   reload()

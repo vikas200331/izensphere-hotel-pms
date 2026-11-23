@@ -301,6 +301,8 @@ export const APPS: AppDef[] = [
         keywords: ["BAR", "Base rate", "Daily tariff", "Seasonal rate"] },
       { to: "/rate-plans", label: "Rate Plans", icon: Tags, group: "Pricing",
         keywords: ["EP", "CP", "MAP", "AP", "Corporate rate", "Direct rate"] },
+      { to: "/cancellation-policies", label: "Cancellation Policies", icon: ClipboardList, group: "Pricing",
+        keywords: ["Cancellation policy", "Refund rules", "No-show fees", "Deadlines"] },
       { to: "/seasons", label: "Seasons", icon: CalendarDays, group: "Pricing",
         keywords: ["High season", "Peak", "Monsoon", "Holiday season"] },
       { to: "/vouchers", label: "Discount Vouchers", icon: BadgePercent, group: "Offers",
@@ -312,7 +314,7 @@ export const APPS: AppDef[] = [
       { to: "/experiences", label: "Guest Experiences", icon: Compass, group: "Packages",
         keywords: ["Add-ons", "Activities", "Tours"] },
     ],
-    extraPrefixes: ["/reports", "/revenue-reports", "/rate-calendar", "/rate-plans", "/seasons", "/vouchers", "/long-stay", "/meal-plans", "/experiences"],
+    extraPrefixes: ["/reports", "/revenue-reports", "/rate-calendar", "/rate-plans", "/cancellation-policies", "/seasons", "/vouchers", "/long-stay", "/meal-plans", "/experiences"],
   },
 
   // 9. Direct Booking

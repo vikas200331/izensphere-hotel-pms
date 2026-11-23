@@ -66,6 +66,15 @@ export interface BookingSummary {
   precheckin_token: string
   cancellation_number?: string
   cancellation_reason?: string
+  cancellation_policy?: string
+  cancellation_policy_type?: string
+  cancellation_deadline?: string
+  cancellation_fee_rule?: string
+  cancellation_policy_description?: string
+  cancellation_fee?: number
+  eligible_refund?: number
+  refund_amount?: number
+  refund_status?: string
   special_requests?: string
   created_at?: string
   grand_total: number
@@ -149,6 +158,38 @@ export default function GuestPortal() {
   const [cxlNote, setCxlNote] = useState("")
   const [cxlSubmitting, setCxlSubmitting] = useState(false)
   const [cxlError, setCxlError] = useState<string | null>(null)
+  interface CxlPreview {
+    booking_amount: number
+    amount_paid: number
+    cancellation_fee: number
+    effective_penalty: number
+    eligible_refund: number
+    is_before_deadline: boolean
+    cancellation_deadline: string | null
+    policy_name: string
+    policy_type: string
+    policy_description: string
+    fee_basis: string
+    currency_symbol: string
+  }
+  const [cxlPreview, setCxlPreview] = useState<CxlPreview | null>(null)
+  const [cxlPreviewLoading, setCxlPreviewLoading] = useState(false)
+
+  useEffect(() => {
+    if (!cancellingBooking) {
+      setCxlPreview(null)
+      return
+    }
+    setCxlPreviewLoading(true)
+    call<CxlPreview>("izensphere_stay_and_dine.public_api.preview_guest_cancellation", {
+      reference: cancellingBooking.reservation,
+      phone: cancellingBooking.guest_phone || "",
+      token: cancellingBooking.precheckin_token || "",
+    })
+      .then(setCxlPreview)
+      .catch(() => setCxlPreview(null))
+      .finally(() => setCxlPreviewLoading(false))
+  }, [cancellingBooking])
 
   const auth = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -572,15 +613,40 @@ export default function GuestPortal() {
 
                   {/* Cancelled Banner if applicable */}
                   {b.status === "Cancelled" && (
-                    <div className="border-b border-rose-200 bg-rose-50/70 px-5 py-2.5 text-xs text-rose-800 flex items-center justify-between">
-                      <div>
-                        <b>{t("Reservation Cancelled")}</b>
-                        {b.cancellation_number && (
-                          <span> · {t("Cancellation Ref")}: <span className="font-mono font-semibold">{b.cancellation_number}</span></span>
+                    <div className="border-b border-rose-200 bg-rose-50/70 px-5 py-2.5 text-xs text-rose-800 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <b>{t("Reservation Cancelled")}</b>
+                          {b.cancellation_number && (
+                            <span> · {t("Cancellation Ref")}: <span className="font-mono font-semibold">{b.cancellation_number}</span></span>
+                          )}
+                        </div>
+                        {b.cancellation_reason && (
+                          <span className="text-rose-600 font-medium">{b.cancellation_reason}</span>
                         )}
                       </div>
-                      {b.cancellation_reason && (
-                        <span className="text-rose-600">{b.cancellation_reason}</span>
+                      <div className="flex items-center gap-3 text-[11px] text-zinc-600">
+                        {b.cancellation_fee !== undefined && (
+                          <span>{t("Fee Charged")}: <b className="text-zinc-800">₹{b.cancellation_fee.toLocaleString()}</b></span>
+                        )}
+                        {b.eligible_refund !== undefined && b.eligible_refund > 0 && (
+                          <span className="text-emerald-700 font-semibold">
+                            · {t("Eligible Refund")}: ₹{b.eligible_refund.toLocaleString()} ({b.refund_status || "Pending"})
+                          </span>
+                        )}
+                        {b.cancellation_policy_type && (
+                          <span className="text-zinc-400">· {b.cancellation_policy_type}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Policy Info for Active Bookings */}
+                  {b.status !== "Cancelled" && b.cancellation_policy_description && (
+                    <div className="border-b border-zinc-100 bg-zinc-50/50 px-5 py-1.5 text-[11px] text-zinc-500 flex items-center justify-between">
+                      <span className="truncate">{b.cancellation_policy_description}</span>
+                      {b.cancellation_deadline && (
+                        <span className="text-zinc-400 shrink-0 font-mono text-[10px]">{t("Deadline")}: {b.cancellation_deadline.slice(0, 16)}</span>
                       )}
                     </div>
                   )}
@@ -1070,12 +1136,57 @@ export default function GuestPortal() {
               </button>
             </div>
 
-            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50/60 p-3.5 text-xs text-rose-900">
-              <p className="font-semibold">{t("Cancellation Warning")}</p>
-              <p className="mt-1 leading-relaxed">
-                {t("You are requesting cancellation for booking")} <b className="font-mono">{cancellingBooking.reservation}</b> ({cancellingBooking.property_name}). {t("Applicable cancellation policies and fees will be enforced.")}
-              </p>
-            </div>
+            {cxlPreviewLoading ? (
+              <div className="py-6 text-center text-xs text-zinc-500 animate-pulse">
+                {t("Loading cancellation policy and refund details…")}
+              </div>
+            ) : (
+              <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50/80 p-3.5 text-xs text-zinc-700 space-y-2.5">
+                <div className="flex items-center justify-between font-semibold text-zinc-900">
+                  <span>{cxlPreview?.policy_name || t("Hotel Cancellation Policy")}</span>
+                  <span className="text-[11px] text-brand-700 font-medium">{cxlPreview?.policy_type}</span>
+                </div>
+                <p className="leading-relaxed text-zinc-600">
+                  {cxlPreview?.policy_description || t("Applicable hotel cancellation policies and rules will be enforced.")}
+                </p>
+                {cxlPreview?.cancellation_deadline && (
+                  <p className="text-[11px] text-zinc-500">
+                    {cxlPreview.is_before_deadline
+                      ? t("Free cancellation available until {d}", { d: cxlPreview.cancellation_deadline })
+                      : t("Free cancellation deadline ended on {d}", { d: cxlPreview.cancellation_deadline })}
+                  </p>
+                )}
+
+                {/* Refund & Fee Breakdown */}
+                {cxlPreview && (
+                  <div className="grid grid-cols-3 gap-2 border-t border-zinc-200/80 pt-2 text-center text-[11px]">
+                    <div className="rounded-lg bg-white p-2 border border-zinc-100">
+                      <span className="block text-zinc-400">{t("Amount Paid")}</span>
+                      <span className="font-semibold text-zinc-900">{cxlPreview.currency_symbol}{cxlPreview.amount_paid.toLocaleString()}</span>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-zinc-100">
+                      <span className="block text-zinc-400">{t("Cancel Fee")}</span>
+                      <span className={`font-semibold ${cxlPreview.cancellation_fee > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                        {cxlPreview.currency_symbol}{cxlPreview.cancellation_fee.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-zinc-100">
+                      <span className="block text-zinc-400">{t("Eligible Refund")}</span>
+                      <span className="font-semibold text-emerald-700">
+                        {cxlPreview.currency_symbol}{cxlPreview.eligible_refund.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {cxlPreview && cxlPreview.eligible_refund > 0 && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
+                    <b>{t("Eligible Refund: {amt}", { amt: `${cxlPreview.currency_symbol}${cxlPreview.eligible_refund.toLocaleString()}` })}</b>
+                    <p className="mt-0.5 text-[10px] text-emerald-700">{t("Refund will be processed according to the hotel's payment workflow.")}</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleCancellationSubmit} className="mt-4 space-y-4">
               <div>

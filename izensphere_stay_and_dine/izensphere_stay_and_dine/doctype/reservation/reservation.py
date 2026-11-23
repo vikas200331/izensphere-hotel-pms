@@ -283,6 +283,7 @@ class Reservation(Document):
 		self.validate_villa_lockout()
 		self.validate_type_capacity()
 		self.validate_cancellation_path()
+		self.snapshot_cancellation_policy()
 		self.apply_negotiated_rate_plan()
 		self.apply_pricing()
 		self.stamp_room_assignment()
@@ -296,6 +297,12 @@ class Reservation(Document):
 		if self.room and self.room != (old.room if old else None):
 			self.room_assigned_by = frappe.session.user
 			self.room_assigned_at = now_datetime()
+
+	def snapshot_cancellation_policy(self):
+		"""Snapshot hotel cancellation policy when booking is confirmed/created.
+		Preserves original policy on existing bookings."""
+		from izensphere_stay_and_dine.cancellation import snapshot_cancellation_policy
+		snapshot_cancellation_policy(self)
 
 	def apply_negotiated_rate_plan(self):
 		"""A new booking for a company with no rate plan of its own takes

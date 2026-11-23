@@ -108,8 +108,32 @@ def _property_payload(prop) -> dict:
 		"free_cancel_days": int(prop.get("free_cancel_days") or 0),
 		"cancellation_fee": prop.get("cancellation_fee") or "None",
 		"has_cancellation_tiers": bool(prop.get("cancellation_tiers")),
+		"cancellation_policy": _property_cancellation_policy_summary(prop.name),
 		"booking_mode": prop.get("booking_mode") or "Instant",
 		"property_kind": prop.get("property_kind") or "Hotel",
+	}
+
+
+def _property_cancellation_policy_summary(property: str) -> dict:
+	from izensphere_stay_and_dine.cancellation import get_hotel_cancellation_policy
+	cp = get_hotel_cancellation_policy(property)
+	if not cp:
+		return {
+			"policy_name": "Standard Policy",
+			"policy_type": "Free Cancellation",
+			"description": "Free cancellation.",
+			"free_cancel_deadline_hours": 24,
+			"fixed_fee": 0,
+			"percentage_fee": 0,
+		}
+	return {
+		"name": cp.get("name") if isinstance(cp, dict) else cp.name,
+		"policy_name": cp.get("policy_name") if isinstance(cp, dict) else cp.policy_name,
+		"policy_type": cp.get("policy_type") if isinstance(cp, dict) else cp.policy_type,
+		"description": cp.get("description") if isinstance(cp, dict) else cp.description,
+		"free_cancel_deadline_hours": int((cp.get("free_cancel_deadline_hours") if isinstance(cp, dict) else cp.free_cancel_deadline_hours) or 0),
+		"fixed_fee": float((cp.get("fixed_fee") if isinstance(cp, dict) else cp.fixed_fee) or 0),
+		"percentage_fee": float((cp.get("percentage_fee") if isinstance(cp, dict) else cp.percentage_fee) or 0),
 	}
 
 
@@ -1427,6 +1451,15 @@ def lookup_booking(reference: str = "", phone: str = "", token: str = ""):
 			"precheckin_token": res.precheckin_token or "",
 			"cancellation_number": res.cancellation_number or "",
 			"cancellation_reason": res.cancellation_reason or "",
+			"cancellation_policy": res.cancellation_policy or "",
+			"cancellation_policy_type": res.cancellation_policy_type or "",
+			"cancellation_deadline": str(res.cancellation_deadline) if res.cancellation_deadline else "",
+			"cancellation_fee_rule": res.cancellation_fee_rule or "",
+			"cancellation_policy_description": res.cancellation_policy_description or "",
+			"cancellation_fee": float(res.cancellation_fee or 0),
+			"eligible_refund": float(res.eligible_refund or 0),
+			"refund_amount": float(res.refund_amount or 0),
+			"refund_status": res.refund_status or "Not Applicable",
 			"special_requests": res.special_requests or "",
 			"created_at": str(res.creation),
 			"grand_total": grand_total,
@@ -1534,6 +1567,34 @@ def request_booking_change(reference: str = "", phone: str = "", token: str = ""
 
 
 @frappe.whitelist(allow_guest=True)
+@rate_limit(limit=20, seconds=300)
+def preview_guest_cancellation(reference: str = "", phone: str = "", token: str = ""):
+	"""Allow verified guest to preview cancellation charges, refund eligibility, and policy details before confirming."""
+	res, guest = _verify_guest_reservation(reference, phone, token)
+	from izensphere_stay_and_dine.cancellation import calculate_cancellation
+	calc = calculate_cancellation(res)
+	return {
+		"ok": True,
+		"reservation": res.name,
+		"property_name": frappe.db.get_value("Property", res.property, "property_name") or res.property,
+		"check_in_date": str(res.check_in_date),
+		"check_out_date": str(res.check_out_date),
+		"booking_amount": calc["booking_amount"],
+		"amount_paid": calc["amount_paid"],
+		"cancellation_fee": calc["cancellation_fee"],
+		"effective_penalty": calc["effective_penalty"],
+		"eligible_refund": calc["eligible_refund"],
+		"is_before_deadline": calc["is_before_deadline"],
+		"cancellation_deadline": calc["cancellation_deadline"],
+		"policy_name": calc["policy_name"],
+		"policy_type": calc["policy_type"],
+		"policy_description": calc["policy_description"],
+		"fee_basis": calc["fee_basis"],
+		"currency_symbol": "₹",
+	}
+
+
+@frappe.whitelist(allow_guest=True)
 @rate_limit(limit=10, seconds=300)
 def cancel_booking(reference: str = "", phone: str = "", token: str = "", reason: str = "Guest request", note: str = ""):
 	"""Allow verified guest to cancel their reservation per cancellation policy."""
@@ -1553,6 +1614,11 @@ def cancel_booking(reference: str = "", phone: str = "", token: str = "", reason
 		"reservation": res.name,
 		"cancellation_number": cancel_res.get("cancellation_number"),
 		"cancellation_fee": cancel_res.get("fee", 0.0),
+		"eligible_refund": cancel_res.get("eligible_refund", 0.0),
+		"amount_paid": cancel_res.get("amount_paid", 0.0),
+		"refund_status": cancel_res.get("refund_status", "Not Applicable"),
+		"policy_type": cancel_res.get("policy_type"),
+		"policy_description": cancel_res.get("policy_description"),
 		"status": "Cancelled",
 	}
 
@@ -1708,6 +1774,15 @@ def get_customer_booking_history(verified_tokens=None, verified_references=None)
 			"precheckin_token": res.precheckin_token or "",
 			"cancellation_number": res.cancellation_number or "",
 			"cancellation_reason": res.cancellation_reason or "",
+			"cancellation_policy": res.cancellation_policy or "",
+			"cancellation_policy_type": res.cancellation_policy_type or "",
+			"cancellation_deadline": str(res.cancellation_deadline) if res.cancellation_deadline else "",
+			"cancellation_fee_rule": res.cancellation_fee_rule or "",
+			"cancellation_policy_description": res.cancellation_policy_description or "",
+			"cancellation_fee": float(res.cancellation_fee or 0),
+			"eligible_refund": float(res.eligible_refund or 0),
+			"refund_amount": float(res.refund_amount or 0),
+			"refund_status": res.refund_status or "Not Applicable",
 			"special_requests": res.special_requests or "",
 			"created_at": str(res.creation),
 			"grand_total": grand_total,

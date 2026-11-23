@@ -4535,54 +4535,27 @@ def cancellation_tier_for(property: str, days_before: int) -> dict | None:
 def _cancellation_terms(res):
 	"""Policy + fee estimate for a reservation, before anyone commits."""
 	from frappe.utils import date_diff
+	from izensphere_stay_and_dine.cancellation import calculate_cancellation
+	calc = calculate_cancellation(res)
 
-	from izensphere_stay_and_dine.folio import percent_fee, policy_fee
-
-	policy = frappe.db.get_value(
-		"Property", res.property,
-		["free_cancel_days", "cancellation_fee"], as_dict=True)
 	days_before = date_diff(res.check_in_date, nowdate())
+	inside_window = not calc["is_before_deadline"]
 
-	from izensphere_stay_and_dine.pricing import stay_season_rules
-
-	rules = stay_season_rules(res.property, res.check_in_date,
-	                          res.check_out_date, res.room_type)
-	if rules["non_refundable"]:
-		# Peak dates are sold on the understanding that they are not given
-		# back; no band of the policy applies.
-		return {
-			"days_before_arrival": days_before,
-			"free_cancel_days": int(policy.free_cancel_days or 0),
-			"inside_window": True,
-			"fee_basis": "100% of stay",
-			"tier": {"days_before": days_before, "charge_pct": 100.0,
-			         "label": rules["season"] or "Non-refundable dates"},
-			"non_refundable_season": rules["season"],
-			"estimated_fee": percent_fee(res, 100),
-		}
-
-	tier = cancellation_tier_for(res.property, days_before)
-	if tier:
-		pct = tier["charge_pct"]
-		return {
-			"days_before_arrival": days_before,
-			"free_cancel_days": int(policy.free_cancel_days or 0),
-			"inside_window": pct > 0,
-			"fee_basis": f"{pct:g}% of stay",
-			"tier": tier,
-			"estimated_fee": percent_fee(res, pct) if pct else 0.0,
-		}
-
-	inside_window = days_before < int(policy.free_cancel_days or 0)
-	basis = policy.cancellation_fee or "None"
-	fee = policy_fee(res, basis) if inside_window and basis != "None" else 0.0
 	return {
 		"days_before_arrival": days_before,
-		"free_cancel_days": int(policy.free_cancel_days or 0),
+		"free_cancel_days": cint(calc.get("free_cancel_deadline_hours", 24)) // 24,
 		"inside_window": inside_window,
-		"fee_basis": basis,
+		"fee_basis": calc["fee_basis"],
 		"tier": None,
-		"estimated_fee": fee,
+		"estimated_fee": calc["cancellation_fee"],
+		"eligible_refund": calc["eligible_refund"],
+		"amount_paid": calc["amount_paid"],
+		"booking_amount": calc["booking_amount"],
+		"cancellation_policy": calc["policy_name"],
+		"cancellation_policy_type": calc["policy_type"],
+		"cancellation_deadline": calc["cancellation_deadline"],
+		"policy_description": calc["policy_description"],
+		"allow_hotel_cancellation_waiver": calc.get("allow_hotel_cancellation_waiver", 1),
 	}
 
 
@@ -4600,93 +4573,78 @@ CANCEL_REASONS = ["Guest request", "Change of plans", "Duplicate booking",
 
 
 def _do_cancel(res, reason: str = "Guest request", note: str | None = None,
-               waive_fee: int = 0, issue_credit_note: int = 0) -> dict:
+               waive_fee: int = 0, issue_credit_note: int = 0,
+               execute_refund: int = 0, refund_mode: str = "Cash",
+               pin: str | None = None, supervisor_pin: str | None = None,
+               cancellation_time = None) -> dict:
 	"""Shared cancel path for desk API and OTA channel manager."""
-	from frappe.model.naming import make_autoname
-
 	if reason not in CANCEL_REASONS:
 		reason = "Other"
-	terms = _cancellation_terms(res)
 
-	summary = (f"Cancel {res.name} · {reason}"
-	           + (" · fee waived" if int(waive_fee or 0) else ""))
-
-	fee = 0.0
-	if terms["inside_window"] and not int(waive_fee or 0) \
-			and terms["fee_basis"] != "None":
-		from izensphere_stay_and_dine.folio import post_policy_fee
-		tier = terms.get("tier")
-		fee = post_policy_fee(
-			res, terms["fee_basis"],
-			f"Cancellation fee ({terms['fee_basis']})",
-			pct=tier["charge_pct"] if tier else None)
-
-	res.status = "Cancelled"
-	res.cancellation_reason = reason
-	res.cancellation_note = note or ""
-	res.cancellation_number = make_autoname("CXL-.YYYY.-.#####")
-	res.cancellation_fee = fee
-	res.cancelled_on = frappe.utils.now_datetime()
-	frappe.flags.kamra_cancelling = True
-	try:
-		# ignore_permissions: both callers are pre-authorized — the desk wrapper
-		# via @require_roles, the OTA webhook worker as a trusted internal caller
-		# (it runs as Guest). Validation (villa lockout etc.) still runs.
-		res.save(ignore_permissions=True)
-	finally:
-		frappe.flags.kamra_cancelling = False
-
-	voucher_code = None
-	if int(issue_credit_note or 0) == 1:
-		credit_amount = max(0.0, float(res.advance_paid or 0) - fee)
-		if credit_amount > 0:
-			import random
-			import string
-			code_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-			voucher_code = f"CN-{res.name.split('-')[-1]}-{code_suffix}"
-
-			from frappe.utils import add_days, today
-			voucher = frappe.get_doc({
-				"doctype": "Discount Voucher",
-				"property": res.property,
-				"voucher_code": voucher_code,
-				"discount_type": "Amount",
-				"value": credit_amount,
-				"valid_from": today(),
-				"valid_to": add_days(today(), 180),
-				"max_uses": 1,
-				"disabled": 0
-			})
-			voucher.insert(ignore_permissions=True)
-
-	from izensphere_stay_and_dine.savings import log_action
-	log_action("cancel_reservation", "Reservation", res.name, res.property,
-	           minutes_saved=8, rationale=summary)
-
-	return {"reservation": res.name,
-	        "cancellation_number": res.cancellation_number,
-	        "fee": fee, "waived": bool(int(waive_fee or 0)),
-	        "credit_note_voucher": voucher_code}
+	from izensphere_stay_and_dine.cancellation import execute_cancellation
+	return execute_cancellation(
+		res,
+		reason=reason,
+		note=note,
+		waive_fee=waive_fee,
+		issue_credit_note=issue_credit_note,
+		execute_refund=execute_refund,
+		refund_mode=refund_mode,
+		pin=pin,
+		supervisor_pin=supervisor_pin,
+		cancellation_time=cancellation_time,
+	)
 
 
 @frappe.whitelist()
 @require_roles("Front Desk", "Kamra Agent")
 def cancel_reservation(reservation: str, reason: str = "Guest request",
                        note: str | None = None, waive_fee: int = 0,
-                       agent: str | None = None, issue_credit_note: int = 0):
+                       agent: str | None = None, issue_credit_note: int = 0,
+                       execute_refund: int = 0, refund_mode: str = "Cash",
+                       pin: str | None = None, supervisor_pin: str | None = None,
+                       cancellation_time: str | None = None):
 	"""Cancel a booking, applying the property's cancellation policy:
 	free outside the window, else the configured fee lands on the folio.
 	Issues a cancellation number the guest can hold on to. Pass
 	waive_fee=1 to cancel graciously (logged).
-
-	The cancellation is recorded in the action log.
 	"""
 	res = frappe.get_doc("Reservation", reservation)
 	if res.status != "Confirmed":
 		frappe.throw("Only confirmed bookings can be cancelled - "
 		             "checked-in stays check out.")
 	return _do_cancel(res, reason=reason, note=note, waive_fee=waive_fee,
-	                  issue_credit_note=issue_credit_note)
+	                  issue_credit_note=issue_credit_note,
+	                  execute_refund=execute_refund, refund_mode=refund_mode,
+	                  pin=pin, supervisor_pin=supervisor_pin,
+	                  cancellation_time=cancellation_time)
+
+
+@frappe.whitelist()
+@require_roles("Front Desk", "Kamra Agent")
+def process_cancellation_refund(reservation: str, amount: float | None = None,
+                                mode: str = "Cash", reason: str = "Cancellation refund",
+                                pin: str | None = None, supervisor_pin: str | None = None):
+	"""Execute payment refund for a cancelled reservation per policy refund calculation."""
+	from izensphere_stay_and_dine.cancellation import process_cancellation_refund as _proc_refund
+	return _proc_refund(reservation, amount=amount, mode=mode, reason=reason,
+	                    pin=pin, supervisor_pin=supervisor_pin)
+
+
+@frappe.whitelist()
+@require_roles("Front Desk", "Kamra Agent", "Hotel Admin")
+def get_cancellation_analytics(property: str):
+	"""Cancellation analytics, fees collected, and refund records for a hotel."""
+	from izensphere_stay_and_dine.cancellation import get_cancellation_analytics as _get_analytics
+	return _get_analytics(property)
+
+
+@frappe.whitelist()
+@require_roles("Front Desk", "Kamra Agent", "Hotel Admin")
+def get_policy_bookings(cancellation_policy: str):
+	"""List bookings under a cancellation policy."""
+	from izensphere_stay_and_dine.cancellation import get_policy_bookings as _get_bookings
+	return _get_bookings(cancellation_policy)
 
 
 @frappe.whitelist()
@@ -6105,18 +6063,12 @@ def _fee_label(basis: str) -> str:
 
 def cancellation_outlook(property: str, room_type: str, check_in_date: str,
                          check_out_date: str) -> dict:
-	"""The cancellation terms a quote can promise, decided by the same rules
-	cancellation_preview applies when someone actually cancels (season,
-	tiers, then the single free window) - evaluated from today, so a window
-	that has already closed is never offered as a future date.
-
-	free_now: cancelling today costs nothing. free_until: the last date that
-	is still free (None while free_now means free right up to arrival)."""
-	from frappe.utils import add_days, date_diff
+	"""The cancellation terms a quote can promise, decided by the hotel-specific
+	cancellation policy (or season rules / tiers fallback) - evaluated from today."""
+	from frappe.utils import add_days, date_diff, now_datetime
 
 	from izensphere_stay_and_dine.pricing import stay_season_rules
 
-	days_now = date_diff(check_in_date, nowdate())
 	rules = stay_season_rules(property, check_in_date, check_out_date,
 	                          room_type)
 	if rules["non_refundable"]:
@@ -6124,11 +6076,57 @@ def cancellation_outlook(property: str, room_type: str, check_in_date: str,
 		        "fee_basis": "100% of stay",
 		        "fee_label": _fee_label("100% of stay"),
 		        "non_refundable_season": rules["season"]
-		        or "Non-refundable dates"}
+		        or "Non-refundable dates",
+		        "policy_type": "Non-Refundable",
+		        "policy_description": "Non-refundable dates: 100% cancellation charge applies."}
+
+	from izensphere_stay_and_dine.cancellation import (
+		get_hotel_cancellation_policy,
+		calculate_cancellation_deadline,
+	)
+
+	pol = get_hotel_cancellation_policy(property)
+	if pol:
+		deadline = calculate_cancellation_deadline(pol, check_in_date, property=property)
+		free_now = (now_datetime() <= deadline) if deadline else (pol.get("policy_type") == "Free Cancellation")
+		free_until = str(deadline.date()) if deadline and free_now else None
+		pol_type = pol.get("policy_type") or "Free Cancellation"
+
+		if pol_type == "Non-Refundable":
+			fee_basis = "100% of stay"
+			fee_label = "the full stay"
+		elif pol_type == "Fixed Fee":
+			fee_basis = f"Fixed ₹{flt(pol.get('fixed_fee') or 0):,.0f}"
+			fee_label = f"₹{flt(pol.get('fixed_fee') or 0):,.0f} cancellation fee"
+		elif pol_type == "Percentage":
+			pct = flt(pol.get("percentage_fee") or 0)
+			fee_basis = f"{pct:g}% of stay"
+			fee_label = f"{pct:g}% of the stay"
+		elif pol_type == "One Night Tariff":
+			fee_basis = "First Night"
+			fee_label = "the first night"
+		else:
+			fee_basis = "None"
+			fee_label = "Free cancellation"
+
+		return {
+			"free_now": free_now,
+			"free_until": free_until,
+			"fee_basis": fee_basis,
+			"fee_label": fee_label,
+			"non_refundable_season": None,
+			"policy_name": pol.get("policy_name") or pol.get("name"),
+			"policy_type": pol_type,
+			"policy_description": pol.get("description") or "",
+			"cancellation_deadline": str(deadline) if deadline else None,
+			"fixed_fee": flt(pol.get("fixed_fee") or 0),
+			"percentage_fee": flt(pol.get("percentage_fee") or 0),
+			"free_cancel_deadline_hours": cint(pol.get("free_cancel_deadline_hours") or 0),
+		}
+
+	days_now = date_diff(check_in_date, nowdate())
 
 	def charge(d: int) -> tuple[bool, str]:
-		"""(charged?, basis) for a cancellation d days before arrival -
-		the branch _cancellation_terms takes."""
 		tier = cancellation_tier_for(property, d)
 		if tier:
 			return tier["charge_pct"] > 0, f"{tier['charge_pct']:g}% of stay"
@@ -6145,9 +6143,6 @@ def cancellation_outlook(property: str, room_type: str, check_in_date: str,
 		        "fee_basis": basis_now, "fee_label": _fee_label(basis_now),
 		        "non_refundable_season": None}
 
-	# free today: walk towards arrival to the first day that costs. Charges
-	# only change where a tier band starts or where the free window ends,
-	# so those are the only days worth asking about.
 	free_days = int(frappe.db.get_value(
 		"Property", property, "free_cancel_days") or 0)
 	tiers = frappe.get_all(

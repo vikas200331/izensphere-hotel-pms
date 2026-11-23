@@ -123,12 +123,22 @@
   "sb_occupants",
   "occupants",
   "addons",
+  "sb_cancellation_policy",
+  "cancellation_policy",
+  "cancellation_policy_type",
+  "cancellation_deadline",
+  "cancellation_fee_rule",
+  "cancellation_policy_description",
+  "cancellation_policy_snapshot",
   "sb_cancellation",
   "cancellation_reason",
   "cancellation_note",
   "cancellation_number",
   "cancellation_fee",
   "cancelled_on",
+  "eligible_refund",
+  "refund_amount",
+  "refund_status",
   "advance_due",
   "payment_policy",
   "quote_snapshot",
@@ -707,6 +717,49 @@
    "options": "Stay Addon"
   },
   {
+   "fieldname": "sb_cancellation_policy",
+   "fieldtype": "Section Break",
+   "label": "Cancellation Policy Snapshot"
+  },
+  {
+   "fieldname": "cancellation_policy",
+   "fieldtype": "Link",
+   "label": "Cancellation Policy",
+   "options": "Cancellation Policy",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancellation_policy_type",
+   "fieldtype": "Data",
+   "label": "Policy Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancellation_deadline",
+   "fieldtype": "Datetime",
+   "label": "Cancellation Deadline",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancellation_fee_rule",
+   "fieldtype": "Data",
+   "label": "Cancellation Fee Rule",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancellation_policy_description",
+   "fieldtype": "Small Text",
+   "label": "Cancellation Policy Description",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancellation_policy_snapshot",
+   "fieldtype": "Code",
+   "label": "Cancellation Policy Snapshot",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
    "depends_on": "eval:doc.status=='Cancelled'",
    "fieldname": "sb_cancellation",
    "fieldtype": "Section Break",
@@ -741,6 +794,28 @@
    "fieldname": "cancelled_on",
    "fieldtype": "Datetime",
    "label": "Cancelled On",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "eligible_refund",
+   "fieldtype": "Currency",
+   "label": "Eligible Refund",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "refund_amount",
+   "fieldtype": "Currency",
+   "label": "Refund Amount Processed",
+   "read_only": 1
+  },
+  {
+   "default": "Not Applicable",
+   "fieldname": "refund_status",
+   "fieldtype": "Select",
+   "label": "Refund Status",
+   "options": "Not Applicable\nPending\nProcessed\nCredit Note Issued",
    "read_only": 1
   },
   {

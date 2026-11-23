@@ -919,24 +919,42 @@ export default function PublicBooking() {
   // before arrival. Tiered policies are not in the payload, so they get no
   // claim at all; peak dates sold non-refundable say so per room.
   const freeUntil = addDays(search.check_in_date, -p.free_cancel_days)
-  const cancelTerms = (r?: StayResult): { free: boolean; text: string } | null =>
-    r?.quote?.stay_rules?.non_refundable
-      ? { free: false, text: t("Non-refundable") }
-      : p.has_cancellation_tiers
-        ? null
-        : p.cancellation_fee === "None" || !p.free_cancel_days
-          ? { free: true, text: t("Free cancellation") }
-          : freeUntil >= todayPlus(0)
-            ? { free: true, text: t("Free cancellation until {date}", { date: fmtDay(freeUntil) }) }
-            : p.cancellation_fee === "Full Stay"
-              ? { free: false, text: t("Non-refundable") }
-              : { free: false, text: t("Cancellation fee: first night") }
+  const cp = (p as any).cancellation_policy
+  const cancelTerms = (r?: StayResult): { free: boolean; text: string } | null => {
+    const qc = (r?.quote as any)?.cancellation
+    if (qc?.policy_description) {
+      return {
+        free: !!qc.free_now,
+        text: qc.policy_description,
+      }
+    }
+    if (r?.quote?.stay_rules?.non_refundable) {
+      return { free: false, text: t("Non-refundable") }
+    }
+    if (cp?.description) {
+      return {
+        free: cp.policy_type === "Free Cancellation" || (cp.free_cancel_deadline_hours > 0 && freeUntil >= todayPlus(0)),
+        text: cp.description,
+      }
+    }
+    return p.has_cancellation_tiers
+      ? null
+      : p.cancellation_fee === "None" || !p.free_cancel_days
+        ? { free: true, text: t("Free cancellation") }
+        : freeUntil >= todayPlus(0)
+          ? { free: true, text: t("Free cancellation until {date}", { date: fmtDay(freeUntil) }) }
+          : p.cancellation_fee === "Full Stay"
+            ? { free: false, text: t("Non-refundable") }
+            : { free: false, text: t("Cancellation fee: first night") }
+  }
 
   const trust: { icon: typeof Check; text: string }[] = [
-    ...(p.has_cancellation_tiers ? [] : p.cancellation_fee === "None" || !p.free_cancel_days
-      ? [{ icon: ShieldCheck, text: t("Free cancellation") }]
-      : [{ icon: ShieldCheck, text: tn(p.free_cancel_days,
-          "Free cancellation up to {n} day before arrival", "Free cancellation up to {n} days before arrival") }]),
+    ...(cp?.description
+      ? [{ icon: ShieldCheck, text: cp.description }]
+      : p.has_cancellation_tiers ? [] : p.cancellation_fee === "None" || !p.free_cancel_days
+        ? [{ icon: ShieldCheck, text: t("Free cancellation") }]
+        : [{ icon: ShieldCheck, text: tn(p.free_cancel_days,
+            "Free cancellation up to {n} day before arrival", "Free cancellation up to {n} days before arrival") }]),
     ...(p.payment_mode === "Pay at hotel" ? [{ icon: Wallet, text: t("No payment today, pay at the property") }] : []),
     ...(p.booking_mode !== "Request to Book" ? [{ icon: Zap, text: t("Instant confirmation") }] : []),
     { icon: Clock, text: t("Check-in from {in}, check-out by {out}", { in: p.checkin_time.slice(0, 5), out: p.checkout_time.slice(0, 5) }) },

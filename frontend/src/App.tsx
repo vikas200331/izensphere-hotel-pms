@@ -219,6 +219,10 @@ export default function App() {
             element={<ConfiguredScreen config="ratePlansConfig" />}
           />
           <Route
+            path="cancellation-policies"
+            element={<ConfiguredScreen config="cancellationPoliciesConfig" />}
+          />
+          <Route
             path="guardrails"
             element={<ConfiguredScreen config="guardrailsConfig" />}
           />

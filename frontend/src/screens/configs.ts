@@ -113,6 +113,49 @@ export const ratePlansConfig: ScreenConfig = {
   ],
 }
 
+export const cancellationPoliciesConfig: ScreenConfig = {
+  doctype: "Cancellation Policy",
+  title: "Cancellation Policies",
+  description:
+    "Configure hotel-specific cancellation rules, refund conditions, deadlines, and no-show charges.",
+  searchFields: ["policy_name", "policy_code", "policy_type"],
+  pageSize: 25,
+  propertyScoped: true,
+  columns: [
+    { field: "policy_name", label: "Policy Name" },
+    { field: "policy_code", label: "Code", badge: true },
+    { field: "policy_type", label: "Policy Type" },
+    { field: "free_cancel_deadline_hours", label: "Free Hours" },
+    { field: "is_default", label: "Default" },
+    { field: "is_active", label: "Active", statusCheck: true },
+  ],
+  form: [
+    { field: "policy_name", label: "Policy Name", type: "data", required: true },
+    { field: "policy_code", label: "Policy Code", type: "data", required: true },
+    {
+      field: "policy_type",
+      label: "Policy Type",
+      type: "select",
+      options: ["Free Cancellation", "Fixed Fee", "Percentage", "One Night Tariff", "Non-Refundable"],
+      required: true,
+    },
+    { field: "free_cancel_deadline_hours", label: "Free Cancellation Deadline (Hours before check-in)", type: "int" },
+    { field: "fixed_fee", label: "Fixed Cancellation Fee (₹)", type: "currency" },
+    { field: "percentage_fee", label: "Percentage Cancellation Fee (%)", type: "float" },
+    {
+      field: "no_show_fee_type",
+      label: "No-Show Fee Type",
+      type: "select",
+      options: ["One Night Tariff", "Full Stay", "Percentage", "Fixed Fee", "None"],
+    },
+    { field: "no_show_fee_amount", label: "No-Show Fee Amount / %", type: "float" },
+    { field: "allow_hotel_cancellation_waiver", label: "Allow Hotel Fee Waiver", type: "check" },
+    { field: "description", label: "Customer-Facing Policy Description", type: "data" },
+    { field: "is_default", label: "Default Policy for Property", type: "check" },
+    { field: "is_active", label: "Is Active", type: "check" },
+  ],
+}
+
 export const seasonsConfig: ScreenConfig = {
   doctype: "Season",
   title: "Seasons",

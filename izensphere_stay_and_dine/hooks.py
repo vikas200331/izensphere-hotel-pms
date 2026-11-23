@@ -258,6 +258,7 @@ _PROPERTY_SCOPED = (
 	"Cancelled Invoice", "Cash Transfer", "Cashier", "Cashier Session", "Cashier Terminal",
 	"Cashier Transaction", "Channel Manager Connection",
 	"Channel Provider Connection", "City Ledger Account", "City Ledger Entry",
+	"Cancellation Policy",
 	"Copilot Conversation", "Credit Note", "Discount Voucher", "Exchange Rate",
 	"Exchange Transaction", "Experience", "External POS Charge", "Folio", "Folio Ledger Entry",
 	"Folio Reprint", "Group Booking", "Housekeeping Task", "Hurdle Rate",

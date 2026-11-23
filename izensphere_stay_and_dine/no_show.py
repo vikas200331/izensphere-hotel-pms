@@ -46,7 +46,7 @@ NOT_OTA_CHANNELS = {"", "direct", "walk-in", "walkin", "website", "phone",
 
 
 def policy(property: str) -> frappe._dict:
-	"""The property's no-show settings, with the defaults filled in."""
+	"""The property's no-show settings, with the defaults filled in from hotel cancellation policy."""
 	row = frappe.db.get_value(
 		"Property", property,
 		["no_show_charge", "no_show_timing", "protect_late_arrivals",
@@ -56,8 +56,12 @@ def policy(property: str) -> frappe._dict:
 	def flag(v, default=1):
 		return default if v is None or v == "" else cint(v)
 
+	from izensphere_stay_and_dine.cancellation import get_hotel_cancellation_policy
+	cp = get_hotel_cancellation_policy(property)
+	charge = cp.get("no_show_fee_type") if (cp and cp.get("no_show_fee_type")) else (row.get("no_show_charge") or "None")
+
 	return frappe._dict(
-		charge=row.get("no_show_charge") or "None",
+		charge=charge,
 		timing=row.get("no_show_timing") or AT_AUDIT,
 		protect_late=flag(row.get("protect_late_arrivals")),
 		waive_ota=flag(row.get("waive_no_show_fee_for_ota")),
