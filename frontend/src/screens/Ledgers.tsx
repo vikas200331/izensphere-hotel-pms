@@ -15,6 +15,40 @@ const CAN_SETTLE = ["Finance", "Hotel Admin", "System Manager", "Administrator"]
 
 const inr = fmtAmount
 
+function getLedgerDisplay(l: Ledger) {
+  if (l.ledger === "Deposit") {
+    // Deposit ledger is a liability: Cr > Dr means customer deposits are held
+    const held = l.credit - l.debit
+    if (held >= 0) {
+      return {
+        amount: inr(held),
+        badge: held > 0 ? translate("Deposits held") : undefined,
+        detail: translate("Cr ") + inr(l.credit) + translate(" · Dr ") + inr(l.debit),
+      }
+    }
+    return {
+      amount: inr(Math.abs(held)),
+      badge: translate("Over-applied"),
+      detail: translate("Dr ") + inr(l.debit) + translate(" · Cr ") + inr(l.credit),
+    }
+  }
+
+  // Guest, AR, Package: positive is receivable, negative is customer credit
+  if (l.balance < 0) {
+    return {
+      amount: inr(Math.abs(l.balance)),
+      badge: translate("Guest credit"),
+      detail: translate("Cr ") + inr(l.credit) + translate(" · Dr ") + inr(l.debit),
+    }
+  }
+
+  return {
+    amount: inr(l.balance),
+    badge: l.balance > 0 ? translate("Receivable") : undefined,
+    detail: translate("Dr ") + inr(l.debit) + translate(" · Cr ") + inr(l.credit),
+  }
+}
+
 type Ledger = {
   ledger: string
   debit: number
@@ -164,8 +198,8 @@ export default function Ledgers() {
                 {translate("All ledgers in balance")}
               </p>
               <p className="mt-0.5 text-xs text-emerald-700">
-                {translate("Guest and Deposit ledgers match active folio balances exactly (net {v0}).", {
-                  v0: inr(recon?.ledger_net),
+                {translate("Guest and Deposit ledgers match active folio balances exactly ({v0} customer funds held).", {
+                  v0: inr(Math.abs(recon?.ledger_net ?? 0)),
                 })}
               </p>
             </div>
@@ -176,7 +210,7 @@ export default function Ledgers() {
         ) : (
           <div>
             <p className="font-medium">
-              {translate("Ledger differs from folios on {v0} folio(s) by {v1}.", { v0: String(recon?.folios_out ?? 0), v1: String(inr(recon?.difference)) })}
+              {translate("Ledger differs from folios on {v0} folio(s) by {v1}.", { v0: String(recon?.folios_out ?? 0), v1: String(inr(Math.abs(recon?.difference ?? 0))) })}
             </p>
             <p className="mt-0.5 text-xs">{translate("A posting reached the folio but not the ledger, or the other way round.")}</p>
             <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs">
@@ -184,7 +218,7 @@ export default function Ledgers() {
                 <li key={f.folio}>
                   <Link className="underline" to={`/billing/${encodeURIComponent(f.folio)}`}>
                     {f.folio}
-                  </Link>{" "}{translate("folio ")}{inr(f.balance)}{translate(" · ledger ")}{inr(f.ledger)}
+                  </Link>{" "}{translate("folio ")}{inr(Math.abs(f.balance))}{f.balance < 0 ? " Cr" : ""}{translate(" · ledger ")}{inr(Math.abs(f.ledger))}{f.ledger < 0 ? " Cr" : ""}
                 </li>
               ))}
             </ul>
@@ -193,21 +227,31 @@ export default function Ledgers() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {ledgers.map((l) => (
-          <Card key={l.ledger}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-zinc-500">
-                {l.ledger}{translate(" ledger")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-semibold tabular-nums">
-                {inr(l.balance)}
-              </p>
-              <p className="mt-1 text-xs text-zinc-400">{translate("Dr ")}{inr(l.debit)}{translate(" · Cr ")}{inr(l.credit)}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+        {ledgers.map((l) => {
+          const display = getLedgerDisplay(l)
+          return (
+            <Card key={l.ledger}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-zinc-500">
+                  {l.ledger}{translate(" ledger")}
+                </CardTitle>
+                {display.badge && (
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600">
+                    {display.badge}
+                  </span>
+                )}
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-semibold tabular-nums text-zinc-900">
+                  {display.amount}
+                </p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {display.detail}
+                </p>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       <Card>

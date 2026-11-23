@@ -23,17 +23,17 @@ const inr = (n: unknown) =>
 const fmtDate = (d: unknown) =>
   d
     ? new Date(String(d) + "T00:00:00").toLocaleDateString(uiDateLocale(moneyLocale()), {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
     : "-"
 const fmtWhen = (d: unknown) =>
   d
     ? new Date(String(d).replace(" ", "T").slice(0, 19)).toLocaleString(
-        uiDateLocale(moneyLocale()),
-        { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" },
-      )
+      uiDateLocale(moneyLocale()),
+      { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" },
+    )
     : ""
 
 export default function Billing() {
