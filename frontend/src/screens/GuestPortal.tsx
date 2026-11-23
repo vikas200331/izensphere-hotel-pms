@@ -585,6 +585,29 @@ export default function GuestPortal() {
                     </div>
                   )}
 
+                  {/* Modification Request Banner if applicable */}
+                  {b.status !== "Cancelled" && b.special_requests && b.special_requests.includes("[Guest Change Request") && (
+                    <div className="border-b border-amber-200 bg-amber-50/80 px-5 py-2.5 text-xs text-amber-900 flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2">
+                        <Clock className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                        <div>
+                          <span className="font-bold text-amber-900">{t("Stay Modification Requested")}:</span>{" "}
+                          <span className="text-amber-800 font-medium">
+                            {b.special_requests
+                              .split("\n")
+                              .filter((l) => l.trim() && !l.startsWith("[Guest Change Request"))
+                              .slice(-2)
+                              .join(" · ")}
+                          </span>
+                          <span className="ms-2 text-amber-700/80 italic">({t("Pending Front Desk review & approval")})</span>
+                        </div>
+                      </div>
+                      <span className="shrink-0 rounded-md bg-amber-100/90 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800 uppercase tracking-wider">
+                        {t("Under Review")}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Card Content Grid (All 11 Core Fields Displayed) */}
                   <div className="grid grid-cols-1 gap-6 p-5 sm:grid-cols-2 lg:grid-cols-4">
                     {/* 1. Stay Dates */}
