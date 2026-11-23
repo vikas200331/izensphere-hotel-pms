@@ -44,7 +44,7 @@ def _room_type_payload(rt) -> dict:
 		"media": [
 			{"media_type": m.media_type, "url": m.url, "caption": m.caption}
 			for m in (rt.get("media") or [])
-		],
+		] or ([{"media_type": "Image", "url": rt.image, "caption": rt.room_type_name}] if rt.get("image") else []),
 		"location_name": rt.get("location_name"),
 		"location_address": rt.get("location_address"),
 		"google_maps_url": rt.get("google_maps_url"),
