@@ -16,6 +16,7 @@ import { cur, locale } from "../../lib/money"
 import { useT, t as translate, useUILanguage } from "../../lib/i18n"
 import { cn } from "../../lib/utils"
 import { Button } from "../../components/ui/button"
+import DateFilterBar from "../../components/DateFilterBar"
 import {
   OrderView, STATES, StateBadge, hhmm, localDay, money, shortDay, useStateLabel,
   type ListState,
@@ -89,7 +90,6 @@ export default function OrderHistory({ outlet, onClose, onOpenBill }: {
 }) {
   const { t } = useT()
   const label = useStateLabel()
-  const [preset, setPreset] = useState<Preset>("today")
   const [[from, to], setSpan] = useState<[string, string]>(range("today"))
   const [q, setQ] = useState("")
   const [qLive, setQLive] = useState("")
@@ -131,11 +131,6 @@ export default function OrderHistory({ outlet, onClose, onOpenBill }: {
   }, [args])
   useEffect(() => { load(0) }, [load])
 
-  function pick(p: Preset) {
-    setPreset(p)
-    if (p !== "custom") setSpan(range(p))
-  }
-
   async function exportCsv() {
     setExporting(true)
     try {
@@ -157,11 +152,6 @@ export default function OrderHistory({ outlet, onClose, onOpenBill }: {
     else setViewing(r.name)
   }
 
-  const presets: [Preset, string][] = [
-    ["today", t("Today")], ["yesterday", t("Yesterday")], ["week", t("Last 7 days")],
-    ["month30", t("Last 30 days")], ["thismonth", t("This month")], ["year", t("Last year")],
-    ["custom", t("Pick dates")],
-  ]
   const totals = data?.totals
   const span = from === to ? shortDay(from) : `${shortDay(from)} - ${shortDay(to)}`
 
@@ -191,25 +181,14 @@ export default function OrderHistory({ outlet, onClose, onOpenBill }: {
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-7xl space-y-3 p-4">
             {/* when */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {presets.map(([p, text]) => (
-                <button key={p} onClick={() => pick(p)} aria-pressed={preset === p}
-                  className={cn("rounded-full px-3 py-1.5 text-sm font-medium",
-                    preset === p ? "bg-brand-600 text-white" : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100")}>
-                  {text}
-                </button>
-              ))}
-              {preset === "custom" && (
-                <span className="flex items-center gap-1.5">
-                  <input type="date" value={from} max={localDay()} aria-label={t("From")}
-                    onChange={(e) => setSpan([e.target.value || localDay(), to < e.target.value ? e.target.value : to])}
-                    className={selectCls} />
-                  <span className="text-zinc-400">-</span>
-                  <input type="date" value={to} min={from} max={localDay()} aria-label={t("To")}
-                    onChange={(e) => setSpan([from, e.target.value || localDay()])}
-                    className={selectCls} />
-                </span>
-              )}
+            <div className="flex flex-wrap items-center gap-2">
+              <DateFilterBar
+                mode="range"
+                fromDate={from}
+                toDate={to}
+                onRangeChange={(f, t) => setSpan([f, t])}
+                compact
+              />
             </div>
 
             {/* what */}

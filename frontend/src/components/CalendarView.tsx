@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react"
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import { getCalendar, type CalendarData } from "../lib/api"
-import { Button } from "./ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
+import DateFilterBar from "./DateFilterBar"
 import { cn } from "../lib/utils"
 import { cur, moneyLocale } from "../lib/money"
 import { t as translate, useUILanguage, uiDateLocale } from "../lib/i18n"
@@ -20,12 +19,6 @@ function cellTone(available: number, total: number) {
 const DAYS = 14
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
-
-function shift(startIso: string, byDays: number) {
-  const d = new Date(startIso + "T00:00:00")
-  d.setDate(d.getDate() + byDays)
-  return iso(d)
-}
 
 function rangeLabel(dates: string[]) {
   if (!dates.length) return ""
@@ -77,33 +70,13 @@ export function CalendarView(props: {
           <span className="text-xs text-zinc-400">{translate("Click a cell to start a booking")}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            aria-label={translate("Previous 14 days")}
-            onClick={() => setStart((s) => shift(s, -DAYS))}
-          >
-            <ChevronLeft className="size-4" aria-hidden />
-          </Button>
-          <Button
-            variant="outline"
-            disabled={start === iso(new Date())}
-            onClick={() => setStart(iso(new Date()))}
-          >
-            <CalendarDays className="size-4" aria-hidden />{translate(" Today")}</Button>
-          <input
-            type="date"
-            aria-label={translate("Jump to date")}
-            className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm focus:outline-2 focus:outline-offset-1 focus:outline-brand-600"
-            value={start}
-            onChange={(e) => e.target.value && setStart(e.target.value)}
+          <DateFilterBar
+            mode="single"
+            allowModeToggle
+            date={start}
+            onDateChange={setStart}
+            compact
           />
-          <Button
-            variant="outline"
-            aria-label={translate("Next 14 days")}
-            onClick={() => setStart((s) => shift(s, DAYS))}
-          >
-            <ChevronRight className="size-4" aria-hidden />
-          </Button>
         </div>
       </CardHeader>
       <CardContent className={cn(loading && "opacity-60 transition-opacity")}>

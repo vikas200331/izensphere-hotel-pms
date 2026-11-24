@@ -159,6 +159,7 @@ export default function Dashboard() {
           {scope === "property" && (
             <DateFilterBar
               mode="single"
+              allowModeToggle
               date={date}
               onDateChange={setDate}
               label={t("Date")}

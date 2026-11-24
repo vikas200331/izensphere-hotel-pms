@@ -175,6 +175,7 @@ export default function HousekeepingBoard() {
 
       <DateFilterBar
         mode="single"
+        allowModeToggle
         date={date}
         onDateChange={setDate}
         label="Date"

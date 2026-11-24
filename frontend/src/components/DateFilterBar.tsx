@@ -227,8 +227,8 @@ export default function DateFilterBar({
     setActiveMode(mode)
   }, [mode])
 
-  // Can toggle mode if explicitly enabled, or if range handlers or both handlers exist
-  const canToggleMode = allowModeToggle ?? (!!onRangeChange && !!onDateChange)
+  // Can toggle mode if not explicitly disabled
+  const canToggleMode = allowModeToggle !== false
 
   const singlePresets: { key: PresetKey; label: string }[] = useMemo(
     () => [
@@ -358,9 +358,12 @@ export default function DateFilterBar({
               type="button"
               onClick={() => {
                 setActiveMode("range")
-                if (onRangeChange && !fromDate) {
-                  const initial = date || todayStr
-                  onRangeChange(initial, initial)
+                const initial = date || todayStr
+                if (onRangeChange) {
+                  onRangeChange(fromDate || initial, toDate || initial)
+                }
+                if (onDateChange && !date) {
+                  onDateChange(initial)
                 }
               }}
               className="rounded-md px-2 py-0.5 text-xs transition-colors cursor-pointer text-zinc-600 hover:text-zinc-900"
@@ -567,11 +570,11 @@ export default function DateFilterBar({
             type="date"
             aria-label={t("From Date")}
             className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
-            value={fromDate}
+            value={fromDate || date}
             onChange={(e) => {
               const newFrom = e.target.value
-              let newTo = toDate
-              if (newFrom && toDate && newFrom > toDate) {
+              let newTo = toDate || date || newFrom
+              if (newFrom && newTo && newFrom > newTo) {
                 newTo = newFrom
               }
               if (onRangeChange) onRangeChange(newFrom, newTo)
@@ -591,11 +594,12 @@ export default function DateFilterBar({
             type="date"
             aria-label={t("To Date")}
             className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
-            value={toDate}
-            min={fromDate || undefined}
+            value={toDate || date}
+            min={fromDate || date || undefined}
             onChange={(e) => {
               const newTo = e.target.value
-              if (onRangeChange) onRangeChange(fromDate, newTo)
+              const curFrom = fromDate || date || newTo
+              if (onRangeChange) onRangeChange(curFrom, newTo)
             }}
           />
         </div>

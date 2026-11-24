@@ -5,6 +5,7 @@ import { serverError } from "../lib/resource"
 import { Badge } from "../components/ui/badge"
 import { moneyLocale, useLocale } from "../lib/money"
 import { useT, t as translate } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 
 const inr = (n: unknown) =>
@@ -122,21 +123,15 @@ export default function CashierShiftReport() {
           >
             {t("My Till")}
           </Link>
-          <input
-            type="date"
-            aria-label={t("Business date")}
-            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <span className="text-sm text-zinc-400">→</span>
-          <input
-            type="date"
-            aria-label={t("To")}
-            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-            value={toDate || date}
-            min={date}
-            onChange={(e) => setToDate(e.target.value === date ? "" : e.target.value)}
+          <DateFilterBar
+            mode="range"
+            fromDate={date}
+            toDate={toDate || date}
+            onRangeChange={(f, t) => {
+              setDate(f)
+              setToDate(t === f ? "" : t)
+            }}
+            compact
           />
         </div>
       </div>

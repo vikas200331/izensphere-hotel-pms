@@ -18,6 +18,7 @@ import { cur, locale, moneyLocale, fmtAmount } from "../../lib/money"
 import { useT, t as translate, uiDateLocale } from "../../lib/i18n"
 import { cn } from "../../lib/utils"
 import { Button } from "../../components/ui/button"
+import DateFilterBar from "../../components/DateFilterBar"
 import { billHtml, printThermal, type BillData } from "../../lib/thermal"
 
 
@@ -373,18 +374,16 @@ function OrdersTab({ outlet, refreshKey, onOpenBill, onHistory }: {
             placeholder={t("Bill, KOT, table, room, name or phone")}
             className="w-full rounded-lg border border-zinc-300 bg-white py-2 ps-8 pe-2 text-sm focus:outline-2 focus:outline-brand-600" />
         </label>
-        <label className="text-xs text-zinc-500">
-          <span className="mb-0.5 block font-medium">{t("From")}</span>
-          <input type="date" value={from} max={to || today} aria-label={t("From")}
-            onChange={(e) => setFrom(e.target.value || today)}
-            className="w-[9.5rem] rounded-lg border border-zinc-300 bg-white px-2 py-2 text-sm" />
-        </label>
-        <label className="text-xs text-zinc-500">
-          <span className="mb-0.5 block font-medium">{t("To")}</span>
-          <input type="date" value={to} min={from} max={today} aria-label={t("To")}
-            onChange={(e) => setTo(e.target.value || from)}
-            className="w-[9.5rem] rounded-lg border border-zinc-300 bg-white px-2 py-2 text-sm" />
-        </label>
+        <DateFilterBar
+          mode="range"
+          fromDate={from}
+          toDate={to}
+          onRangeChange={(f, t) => {
+            setFrom(f || today)
+            setTo(t || today)
+          }}
+          compact
+        />
         <div className="flex gap-1.5">
           <Button type="button" variant="outline" className="h-10 gap-1.5" disabled={rows.length === 0}
             onClick={doExportCsv} title={t("Download as CSV")}>

@@ -7,6 +7,7 @@ import { serverError } from "../lib/resource"
 import { useT, t as translate } from "../lib/i18n"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
+import DateFilterBar from "../components/DateFilterBar"
 
 
 interface Group {
@@ -62,10 +63,6 @@ interface Sla {
 }
 
 const ticketLink = (name: string) => `/tickets?ticket=${encodeURIComponent(name)}`
-
-const inputCls =
-  "rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm " +
-  "focus:outline-2 focus:outline-offset-1 focus:outline-brand-600"
 
 function humanMins(m: number | null): string {
   if (m == null) return "-"
@@ -158,13 +155,16 @@ export default function OpsSLA() {
             <AlarmClock className="size-5 text-brand-600" />{translate("Operations SLA")}</h1>
           <p className="text-xs text-zinc-500">{translate("Are guest requests being resolved inside their promised window?")}</p>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <input type="date" className={inputCls} value={from}
-            onChange={(e) => setFrom(e.target.value)} />
-          <span className="text-zinc-400">→</span>
-          <input type="date" className={inputCls} value={to}
-            onChange={(e) => setTo(e.target.value)} />
-        </div>
+        <DateFilterBar
+          mode="range"
+          fromDate={from}
+          toDate={to}
+          onRangeChange={(f, t) => {
+            setFrom(f)
+            setTo(t)
+          }}
+          compact
+        />
       </div>
 
       {error && (

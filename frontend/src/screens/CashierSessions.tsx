@@ -5,6 +5,7 @@ import { serverError } from "../lib/resource"
 import { Badge } from "../components/ui/badge"
 import { moneyLocale } from "../lib/money"
 import { t as translate, useUILanguage } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 const inr = (n: unknown) =>
   Number(n ?? 0).toLocaleString(moneyLocale(), { maximumFractionDigits: 0 })
@@ -27,7 +28,8 @@ type Row = {
 export default function CashierSessions() {
   useUILanguage()
   const [rows, setRows] = useState<Row[]>([])
-  const [date, setDate] = useState("")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
   const [err, setErr] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -36,15 +38,17 @@ export default function CashierSessions() {
         "izensphere_stay_and_dine.cashier.list_sessions",
         {
           property: getCurrentProperty(),
-          business_date: date || undefined,
+          business_date: fromDate || undefined,
+          from_date: fromDate || undefined,
+          to_date: toDate || undefined,
         },
       )
       setRows(out.sessions)
-      if (!date) setDate(out.business_date)
+      if (!fromDate) setFromDate(out.business_date)
     } catch (e) {
       setErr(serverError(e))
     }
-  }, [date])
+  }, [fromDate, toDate])
 
   useEffect(() => {
     void load()
@@ -64,15 +68,16 @@ export default function CashierSessions() {
             to="/cashier"
             className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
           >{translate("Open / close till")}</Link>
-          <label className="text-sm">
-            <span className="mr-2 text-zinc-500">{translate("Business date")}</span>
-            <input
-              type="date"
-              className="rounded-lg border border-zinc-300 px-2 py-1.5"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </label>
+          <DateFilterBar
+            mode="range"
+            fromDate={fromDate}
+            toDate={toDate || fromDate}
+            onRangeChange={(f, t) => {
+              setFromDate(f)
+              setToDate(t)
+            }}
+            compact
+          />
         </div>
       </div>
       {err ? (

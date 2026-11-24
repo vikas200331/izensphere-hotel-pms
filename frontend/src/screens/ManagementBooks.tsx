@@ -3,10 +3,10 @@ import { Link } from "react-router-dom"
 import { Info } from "lucide-react"
 import { call, getCurrentProperty } from "../lib/api"
 import { serverError } from "../lib/resource"
-import { Button } from "../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { fmtMoney, taxLabel, useLocale } from "../lib/money"
 import { t as translate, useUILanguage } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 // Management P&L (/profit-and-loss) and balance sheet (/balance-sheet),
 // from izensphere_stay_and_dine.books. Not statutory accounts: the screen says so.
@@ -59,8 +59,6 @@ function monthRange(offset: number): [string, string] {
   const end = offset === 0 ? now : new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)
   return [iso(start), iso(end)]
 }
-
-const input = "rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm"
 
 export default function ManagementBooks({ view }: { view: "pnl" | "balance" }) {
   useUILanguage()
@@ -121,12 +119,14 @@ function ProfitAndLoss() {
 
   return (
     <>
-      <div className="flex flex-wrap items-end gap-2">
-        <Button variant="outline" onClick={() => setRange(monthRange(0))}>{translate("This month")}</Button>
-        <Button variant="outline" onClick={() => setRange(monthRange(-1))}>{translate("Last month")}</Button>
-        <input type="date" className={input} value={range[0]} onChange={(e) => setRange([e.target.value, range[1]])} />
-        <span className="pb-2 text-zinc-400">{translate("to")}</span>
-        <input type="date" className={input} value={range[1]} onChange={(e) => setRange([range[0], e.target.value])} />
+      <div className="flex flex-wrap items-center gap-2">
+        <DateFilterBar
+          mode="range"
+          fromDate={range[0]}
+          toDate={range[1]}
+          onRangeChange={(f, t) => setRange([f, t])}
+          compact
+        />
       </div>
       {err ? <p className="text-sm text-rose-600">{translate(err)}</p> : null}
       {data ? (
@@ -184,10 +184,15 @@ function BalanceSheet() {
 
   return (
     <>
-      <label className="flex items-center gap-2 text-sm text-zinc-600">
-        {translate("As of")}
-        <input type="date" className={input} value={asOf} max={iso(new Date())} onChange={(e) => setAsOf(e.target.value)} />
-      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <DateFilterBar
+          mode="single"
+          date={asOf}
+          onDateChange={setAsOf}
+          label="As of"
+          compact
+        />
+      </div>
       {err ? <p className="text-sm text-rose-600">{translate(err)}</p> : null}
       {data ? (
         <div className="grid gap-4 lg:grid-cols-2">

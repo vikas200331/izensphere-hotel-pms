@@ -11,13 +11,14 @@ import { useT, t as translate } from "../lib/i18n"
 import { cn } from "../lib/utils"
 import { StatCard } from "./ui/stat-card"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
+import DateFilterBar from "./DateFilterBar"
 
 
 type SortKey = "nights" | "occupancy_pct" | "revenue" | "out_of_service_nights" | "avg_clean_minutes"
 
 export default function RoomInsights(props: { onOpenRoom: (room: string) => void }) {
   const { t } = useT()
-  const [days, setDays] = useState(30)
+  const days = 30
   // a picked range overrides the preset windows ("" = use the preset)
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
@@ -55,39 +56,15 @@ export default function RoomInsights(props: { onOpenRoom: (room: string) => void
   return (
     <div className="min-w-0">
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {[30, 90].map((n) => (
-          <button
-            key={n}
-            onClick={() => {
-              setDays(n)
-              setFromDate("")
-              setToDate("")
-            }}
-            className={cn(
-              "min-h-10 rounded-lg border px-3 text-sm font-medium",
-              days === n && !fromDate
-                ? "border-brand-600 bg-brand-50 text-brand-800"
-                : "border-zinc-200 bg-white text-zinc-600",
-            )}
-          >
-            {t("Last {n} days", { n })}
-          </button>
-        ))}
-        <input
-          type="date"
-          aria-label={t("From")}
-          className="min-h-10 rounded-lg border border-zinc-200 px-2 text-sm"
-          value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
-        />
-        <input
-          type="date"
-          aria-label={t("To")}
-          className="min-h-10 rounded-lg border border-zinc-200 px-2 text-sm"
-          value={toDate}
-          min={fromDate || undefined}
-          disabled={!fromDate}
-          onChange={(e) => setToDate(e.target.value)}
+        <DateFilterBar
+          mode="range"
+          fromDate={fromDate}
+          toDate={toDate}
+          onRangeChange={(f, t) => {
+            setFromDate(f)
+            setToDate(t)
+          }}
+          compact
         />
         {d && (
           <span className="text-sm text-zinc-500">

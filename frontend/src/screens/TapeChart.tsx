@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useOutletContext } from "react-router-dom"
 import type { ShellContext } from "../AppShell"
 import {
-  ArrowLeftRight, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ExternalLink,
+  ArrowLeftRight, CalendarRange, ChevronDown, ExternalLink,
   Lock, LogIn, LogOut, Sparkles, Star,
 } from "lucide-react"
 import { amendStay, amendStayPreview, call, getCurrentProperty, type RepricePreview } from "../lib/api"
@@ -17,6 +17,7 @@ import { useT, t as translate, uiDateLocale } from "../lib/i18n"
 import CheckOutDialog from "../components/CheckOutDialog"
 import CheckInDialog from "../components/CheckInDialog"
 import RoomChangeDialog from "../components/RoomChangeDialog"
+import DateFilterBar from "../components/DateFilterBar"
 
 
 /** The tape chart: rooms × dates, bookings as bars. Click a bar to open the
@@ -473,16 +474,14 @@ export default function TapeChart() {
           {allocBusy ? t("Thinking...") : t("Auto-assign arrivals")}
         </Button>
         <div className="ms-auto flex items-center gap-1">
-          <Button variant="outline" aria-label={t("Previous")}
-            onClick={() => setStart(shiftDate(start, mode === "day" ? -7 : -1) || todayIso())}>
-            <ChevronLeft className="size-4 rtl:rotate-180" />
-          </Button>
-          <input type="date" className={cn(inputCls, "w-40")} value={start}
-            onChange={(e) => setStart(e.target.value)} />
-          <Button variant="outline" aria-label={t("Next")}
-            onClick={() => setStart(shiftDate(start, mode === "day" ? 7 : 1) || todayIso())}>
-            <ChevronRight className="size-4 rtl:rotate-180" />
-          </Button>
+          <DateFilterBar
+            mode="single"
+            allowModeToggle
+            date={start}
+            onDateChange={setStart}
+            label={t("Start")}
+            compact
+          />
         </div>
       </div>
 

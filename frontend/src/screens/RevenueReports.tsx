@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { cur, moneyLocale } from "../lib/money"
 import { getLang } from "../lib/dir"
 import { t as translate, useUILanguage } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 const inr = (n: number) =>
   Number(n || 0).toLocaleString(moneyLocale(), { maximumFractionDigits: 0 })
@@ -264,21 +265,16 @@ function Contribution() {
           <CardTitle>{translate("Contribution analysis")}</CardTitle>
           <p className="mt-0.5 text-xs text-zinc-400">{translate("Who brings the business - revenue and share by channel.")}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <input
-            type="date"
-            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            aria-label={translate("From")}
-          />
-          <span className="text-xs text-zinc-400">{translate("to")}</span>
-          <input
-            type="date"
-            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            aria-label={translate("To")}
+        <div className="flex flex-wrap items-center gap-2">
+          <DateFilterBar
+            mode="range"
+            fromDate={from}
+            toDate={to}
+            onRangeChange={(f, t) => {
+              setFrom(f)
+              setTo(t)
+            }}
+            compact
           />
           <select
             className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm"

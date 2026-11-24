@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button"
 import { Card, CardContent, CardHeader } from "../components/ui/card"
 import { cur, moneyLocale } from "../lib/money"
 import { t as translate, useUILanguage } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 type Row = Record<string, unknown>
 type Line = Record<string, unknown>
@@ -177,20 +178,15 @@ export default function AccountingExport() {
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              aria-label={translate("From")}
-            />
-            <span className="text-xs text-zinc-400">{translate("to")}</span>
-            <input
-              type="date"
-              className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              aria-label={translate("To")}
+            <DateFilterBar
+              mode="range"
+              fromDate={from}
+              toDate={to}
+              onRangeChange={(f, t) => {
+                setFrom(f)
+                setTo(t)
+              }}
+              compact
             />
             <select
               className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm"

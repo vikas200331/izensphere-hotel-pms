@@ -10,6 +10,7 @@ import { call, getCurrentProperty } from "../lib/api"
 import { serverError } from "../lib/resource"
 import { Button } from "../components/ui/button"
 import { useT, t as translate } from "../lib/i18n"
+import DateFilterBar from "../components/DateFilterBar"
 
 
 interface Row {
@@ -92,20 +93,15 @@ export default function VoidAllowanceReport() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <input
-            type="date"
-            aria-label={t("From")}
-            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-          <span className="text-xs text-zinc-400">{t("to")}</span>
-          <input
-            type="date"
-            aria-label={t("To")}
-            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
+          <DateFilterBar
+            mode="range"
+            fromDate={from}
+            toDate={to}
+            onRangeChange={(f, t) => {
+              setFrom(f)
+              setTo(t)
+            }}
+            compact
           />
           <Button variant="outline" onClick={() => window.print()}>
             <Printer className="size-4" aria-hidden /> {t("Print")}

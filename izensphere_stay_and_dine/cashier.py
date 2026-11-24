@@ -650,9 +650,15 @@ def set_petty_cash_float(property: str, amount: float):
 @frappe.whitelist()
 @require_roles("Front Desk", "Finance", "Hotel Admin", "Night Auditor", "Kamra Agent")
 def list_sessions(property: str, business_date: str | None = None,
-                  status: str | None = None):
+                  status: str | None = None, from_date: str | None = None, to_date: str | None = None):
 	filters: dict[str, Any] = {"property": property}
-	if business_date:
+	if from_date and to_date:
+		filters["business_date"] = ["between", [from_date, to_date]]
+	elif from_date:
+		filters["business_date"] = [">=", from_date]
+	elif to_date:
+		filters["business_date"] = ["<=", to_date]
+	elif business_date:
 		filters["business_date"] = business_date
 	if status:
 		filters["status"] = status

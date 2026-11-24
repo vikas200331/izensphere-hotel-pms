@@ -165,6 +165,7 @@ export default function Ledgers() {
         <div className="flex flex-wrap items-center gap-2">
           <DateFilterBar
             mode="single"
+            allowModeToggle
             date={date}
             onDateChange={setDate}
             label="Date"
