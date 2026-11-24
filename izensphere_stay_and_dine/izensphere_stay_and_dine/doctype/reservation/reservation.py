@@ -779,7 +779,10 @@ class Reservation(Document):
 			SELECT name FROM `tabReservation`
 			WHERE room = %(room)s
 			  AND name != %(name)s
-			  AND status IN ('Confirmed', 'Checked In', 'Held', 'Pending Payment')
+			  AND (
+			    status IN ('Confirmed', 'Checked In')
+			    OR (status IN ('Held', 'Pending Payment') AND (hold_expires_on IS NULL OR hold_expires_on >= NOW()))
+			  )
 			  AND check_in_date < GREATEST(%(check_out)s,
 			                               DATE_ADD(%(check_in)s, INTERVAL 1 DAY))
 			  AND GREATEST(check_out_date,

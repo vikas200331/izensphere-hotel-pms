@@ -20,6 +20,39 @@ export interface RoomPermissions {
   money: boolean
 }
 
+export type ReservationStatus =
+  | "Available"
+  | "Temporary Hold"
+  | "Reserved"
+  | "Occupied"
+  | "Blocked"
+  | "Out of Service"
+
+export interface ReservationDetailInfo {
+  name: string
+  guest_name: string
+  guest_phone: string
+  guest_email: string
+  source: string
+  source_label: string
+  status: string
+  check_in_date: string
+  check_out_date: string
+  is_check_in: boolean
+  is_check_out: boolean
+  advance_paid: number
+  amount_after_tax: number
+}
+
+export interface DayStatusInfo {
+  date: string
+  reservation_status: ReservationStatus
+  housekeeping_status: HkStatus
+  is_check_in: boolean
+  is_check_out: boolean
+  reservation?: ReservationDetailInfo
+}
+
 export interface BoardRoom {
   name: string
   room_number: string
@@ -28,6 +61,9 @@ export interface BoardRoom {
   floor: string | null
   housekeeping_status: HkStatus
   occupancy_status: "Vacant" | "Occupied" | "Reserved"
+  reservation_status: ReservationStatus
+  reservation_details?: ReservationDetailInfo | null
+  days?: Record<string, DayStatusInfo>
   stay: {
     reservation: string
     guest_name: string
@@ -62,7 +98,11 @@ export interface BoardRoom {
 export interface RoomsSummary {
   total: number
   available: number
+  reserved: number
   occupied: number
+  temporary_hold: number
+  blocked: number
+  out_of_service: number
   arrivals: number
   departures: number
   dirty: number
@@ -70,22 +110,26 @@ export interface RoomsSummary {
   inspected: number
   cleaning: number
   maintenance: number
-  out_of_service: number
 }
 
 export interface RoomsBoard {
   date: string
+  to_date?: string
   today?: string
+  view?: string
+  dates?: string[]
   rooms: BoardRoom[]
   room_types: { name: string; room_type_name: string }[]
   summary?: RoomsSummary
   can: RoomPermissions
 }
 
-export const getRoomsBoard = (date?: string) =>
+export const getRoomsBoard = (date?: string, toDate?: string, view: string = "daily") =>
   call<RoomsBoard>("izensphere_stay_and_dine.rooms.rooms_board", {
     property: getCurrentProperty(),
     date: date || undefined,
+    to_date: toDate || undefined,
+    view: view || undefined,
   })
 
 export interface RoomDetail {

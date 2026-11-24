@@ -6545,6 +6545,8 @@ def create_booking(property: str, room_type: str, check_in_date: str,
 	if not room and int(assign_room) and not int(waitlist or 0):
 		# Serialize hybrid / SIU capacity before reading free rooms (ADR-007).
 		lock_sius_for_booking(property, room_type)
+		from izensphere_stay_and_dine.reservation_state import expire_holds
+		expire_holds()
 		# a group pickup books against its own block, not general inventory
 		free = available_rooms(property, room_type, check_in_date,
 		                       check_out_date, group_booking=group_booking)
@@ -6553,6 +6555,12 @@ def create_booking(property: str, room_type: str, check_in_date: str,
 			# before one whose guest departs today but has not left yet
 			occupied = in_house_rooms(property)
 			free = sorted(free, key=lambda r: r["name"] in occupied)
+		if not free and (source in ("Website", "OTA") or int(assign_room)):
+			from izensphere_stay_and_dine.exceptions import InventoryRefused
+			frappe.throw(
+				f"No {room_type} rooms are available for the dates {check_in_date} to {check_out_date}.",
+				exc=InventoryRefused,
+			)
 		# SIU path returns plain dicts; legacy SQL returns frappe._dict.
 		room = free[0]["name"] if free else None
 	elif not int(waitlist or 0):
@@ -7445,7 +7453,10 @@ def _available_rooms_raw(property: str, room_type: str, check_in_date: str,
 		  AND NOT EXISTS (
 			SELECT 1 FROM `tabReservation` b
 			WHERE b.room = r.name
-			  AND b.status IN ('Confirmed', 'Checked In')
+			  AND (
+			    b.status IN ('Confirmed', 'Checked In')
+			    OR (b.status IN ('Held', 'Pending Payment') AND (b.hold_expires_on IS NULL OR b.hold_expires_on >= NOW()))
+			  )
 			  AND b.check_in_date < GREATEST(%(check_out)s,
 			                                 DATE_ADD(%(check_in)s, INTERVAL 1 DAY))
 			  AND GREATEST(b.check_out_date,

@@ -73,19 +73,39 @@ def _room_or_404(room: str) -> dict:
 
 # --- the board -----------------------------------------------------------------
 
+def _source_label(source: str | None, channel: str | None = None) -> str:
+	s = (source or "").strip()
+	if s in ("Website", "Online"):
+		return "Online"
+	if s == "Walk-in":
+		return "Walk-in"
+	if s == "OTA":
+		return f"OTA ({channel})" if channel else "OTA"
+	if s in ("Direct", "Phone", "Manual", "PMS"):
+		return "Direct"
+	if s == "AI Agent":
+		return "AI Agent"
+	return s or "Direct"
+
+
 @frappe.whitelist()
 @require_roles(*BOARD_ROLES)
-def rooms_board(property: str, date: str | None = None):
-	"""Every room of the property as a tile: housekeeping status, who is in
-	it, who arrives or leaves on the requested date, whether it is out of service,
-	and its open housekeeping task. One call, a fixed number of queries."""
+def rooms_board(property: str, date: str | None = None, to_date: str | None = None, view: str = "daily"):
+	"""Every room of the property as a tile or matrix: reservation availability status,
+	housekeeping status, reservation details (guest, booking ref, source),
+	check-in/out indicators, and open tasks.
+	Supports single-date, date range, and daily/weekly/monthly views."""
 	assert_property_access(property)
 
+	from izensphere_stay_and_dine.reservation_state import expire_holds
+	expire_holds()
+
+	import datetime
 	prop_tz = frappe.db.get_value("Property", property, "timezone")
 	today = None
 	if prop_tz:
 		try:
-			import zoneinfo, datetime
+			import zoneinfo
 			today = datetime.datetime.now(zoneinfo.ZoneInfo(prop_tz.strip())).date()
 		except Exception:
 			pass
@@ -94,6 +114,22 @@ def rooms_board(property: str, date: str | None = None):
 
 	target_date = getdate(date) if date else today
 	is_today = (target_date == today)
+
+	# Determine date window based on to_date and view mode
+	if to_date:
+		end_date = getdate(to_date)
+		if end_date < target_date:
+			end_date = target_date
+	elif view == "weekly":
+		end_date = target_date + datetime.timedelta(days=6)
+	elif view == "monthly":
+		end_date = target_date + datetime.timedelta(days=29)
+	else:
+		end_date = target_date
+
+	span_days = (end_date - target_date).days + 1
+	dates_list = [target_date + datetime.timedelta(days=i) for i in range(span_days)]
+	date_strings = [str(d) for d in dates_list]
 
 	rooms = frappe.get_all(
 		"Room", filters={"property": property},
@@ -104,19 +140,23 @@ def rooms_board(property: str, date: str | None = None):
 		"Room Type", filters={"property": property},
 		fields=["name", "room_type_name"])}
 
-	# Room blocks on target_date: from_date <= target_date < to_date
-	blocks = {}
-	for b in frappe.get_all(
-			"Room Block",
-			filters={"property": property, "block_status": "Active",
-			         "from_date": ("<=", target_date), "to_date": (">", target_date)},
-			fields=["name", "room", "reason", "from_date", "to_date", "note"],
-			order_by="from_date asc"):
-		blocks.setdefault(b.room, b)
+	# Room blocks overlapping [target_date, end_date + 1 day)
+	blocks_rows = frappe.db.sql("""
+		SELECT name, room, reason, from_date, to_date, note
+		FROM `tabRoom Block`
+		WHERE property = %(property)s
+		  AND block_status = 'Active'
+		  AND from_date <= %(end_date)s
+		  AND to_date > %(start_date)s
+		ORDER BY from_date asc
+	""", {"property": property, "start_date": target_date, "end_date": end_date}, as_dict=True)
+	blocks_by_room = {}
+	for b in blocks_rows:
+		blocks_by_room.setdefault(b.room, []).append(b)
 
 	# Housekeeping tasks
 	tasks = {}
-	if is_today:
+	if is_today or (target_date <= today <= end_date):
 		for t in frappe.get_all(
 				"Housekeeping Task",
 				filters={"property": property, "status": ("in", ["Pending", "In Progress"])},
@@ -127,30 +167,31 @@ def rooms_board(property: str, date: str | None = None):
 
 	names = _user_names(t.assigned_to_user for t in tasks.values())
 
-	# Fetch reservations touching target_date or (if today) currently Checked In
-	if is_today:
-		res_rows = frappe.db.sql("""
-			SELECT name, room, guest_name, status, check_in_date, check_out_date, is_day_use, eta
-			FROM `tabReservation`
-			WHERE property = %(property)s
-			  AND room IS NOT NULL AND room != ''
-			  AND (
-			    status = 'Checked In'
-			    OR (status IN ('Confirmed', 'Checked In', 'Checked Out') AND (check_in_date = %(target)s OR check_out_date = %(target)s))
-			  )
-			ORDER BY check_in_date asc, creation asc
-		""", {"property": property, "target": target_date}, as_dict=True)
-	else:
-		res_rows = frappe.db.sql("""
-			SELECT name, room, guest_name, status, check_in_date, check_out_date, is_day_use, eta
-			FROM `tabReservation`
-			WHERE property = %(property)s
-			  AND status IN ('Confirmed', 'Checked In', 'Checked Out')
-			  AND room IS NOT NULL AND room != ''
-			  AND check_in_date <= %(target)s
-			  AND GREATEST(check_out_date, DATE_ADD(check_in_date, INTERVAL 1 DAY)) >= %(target)s
-			ORDER BY check_in_date asc, creation asc
-		""", {"property": property, "target": target_date}, as_dict=True)
+	# Fetch reservations touching [target_date, end_date + 1 day)
+	res_rows = frappe.db.sql("""
+		SELECT
+			r.name, r.room, r.guest, r.guest_name, r.status, r.source, r.channel,
+			r.check_in_date, r.check_out_date, r.is_day_use, r.eta,
+			r.advance_paid, r.amount_after_tax, r.hold_expires_on,
+			r.planned_check_in_time, r.planned_check_out_time,
+			COALESCE(g.phone, r.booked_by_phone, '') AS guest_phone,
+			COALESCE(g.email, '') AS guest_email
+		FROM `tabReservation` r
+		LEFT JOIN `tabGuest` g ON g.name = r.guest
+		WHERE r.property = %(property)s
+		  AND r.room IS NOT NULL AND r.room != ''
+		  AND (
+		    r.status = 'Checked In'
+		    OR (r.status IN ('Confirmed', 'Checked Out')
+		        AND r.check_in_date <= %(end_date)s
+		        AND GREATEST(r.check_out_date, DATE_ADD(r.check_in_date, INTERVAL 1 DAY)) >= %(start_date)s)
+		    OR (r.status IN ('Pending Payment', 'Held')
+		        AND (r.hold_expires_on IS NULL OR r.hold_expires_on >= NOW())
+		        AND r.check_in_date <= %(end_date)s
+		        AND GREATEST(r.check_out_date, DATE_ADD(r.check_in_date, INTERVAL 1 DAY)) >= %(start_date)s)
+		  )
+		ORDER BY r.check_in_date asc, r.creation asc
+	""", {"property": property, "start_date": target_date, "end_date": end_date}, as_dict=True)
 
 	res_by_room = {}
 	for r_res in res_rows:
@@ -160,81 +201,182 @@ def rooms_board(property: str, date: str | None = None):
 	for r in rooms:
 		r_dict = dict(r)
 		r_dict["room_type_name"] = rt_names.get(r.room_type, r.room_type)
-		blk = blocks.get(r.name)
+		room_blocks = blocks_by_room.get(r.name, [])
 		t = tasks.get(r.name)
-
 		room_res = res_by_room.get(r.name, [])
 
-		# 1. Arrival on target_date:
-		arr_res = next((res for res in room_res
-		                if getdate(res.check_in_date) == target_date
-		                and res.status in ("Confirmed", "Checked In", "Checked Out")), None)
+		days_map = {}
+		for d in dates_list:
+			# Block on day d
+			b_d = next((b for b in room_blocks if getdate(b.from_date) <= d < getdate(b.to_date)), None)
 
-		# 2. Stay & Departure on target_date:
-		stay_res = None
-		dep_res = None
+			# Stay (covers night d)
+			stay_res_d = next(
+				(res for res in room_res
+				 if ((getdate(res.check_in_date) <= d < getdate(res.check_out_date))
+				     or (res.is_day_use and getdate(res.check_in_date) == d)
+				     or (d == today and res.status == "Checked In"))),
+				None
+			)
 
-		if is_today:
-			checked_in = next((res for res in room_res if res.status == "Checked In"), None)
-			if checked_in:
-				stay_res = checked_in
-			dep_match = next((res for res in room_res if getdate(res.check_out_date) == target_date), None)
-			if dep_match:
-				dep_res = dep_match
-		else:
-			for res in room_res:
-				cin = getdate(res.check_in_date)
-				cout = getdate(res.check_out_date)
-				if cout == target_date:
-					dep_res = res
-				if cin < target_date < cout or (res.is_day_use and cin == target_date):
-					stay_res = res
-				elif cin == target_date and cout > target_date:
-					if target_date < today and res.status in ("Checked In", "Checked Out"):
-						stay_res = res
-					elif target_date > today and res.status in ("Confirmed", "Checked In"):
-						stay_res = res
+			# Arrival on day d
+			arr_res_d = next(
+				(res for res in room_res
+				 if getdate(res.check_in_date) == d
+				 and res.status in ("Confirmed", "Checked In", "Pending Payment", "Held")),
+				None
+			)
 
-		# Assemble stay payload
-		if stay_res:
-			r_dict["stay"] = {
-				"reservation": stay_res.name,
-				"guest_name": stay_res.guest_name,
-				"surname": _surname(stay_res.guest_name),
-				"check_in_date": str(stay_res.check_in_date),
-				"check_out_date": str(stay_res.check_out_date),
-				"departing_today": getdate(stay_res.check_out_date) <= target_date,
-				"day_use": bool(stay_res.is_day_use),
+			# Departure on day d
+			dep_res_d = next(
+				(res for res in room_res
+				 if getdate(res.check_out_date) == d
+				 and res.status in ("Confirmed", "Checked In", "Checked Out")),
+				None
+			)
+
+			# Compute reservation status for day d
+			if r.housekeeping_status in ("Out of Order", "Maintenance"):
+				status_d = "Out of Service"
+			elif b_d:
+				status_d = "Blocked"
+			elif stay_res_d:
+				if stay_res_d.status == "Checked In":
+					status_d = "Occupied"
+				elif stay_res_d.status == "Confirmed":
+					status_d = "Reserved"
+				elif stay_res_d.status in ("Pending Payment", "Held"):
+					status_d = "Temporary Hold"
+				else:
+					status_d = "Available"
+			elif arr_res_d:
+				if arr_res_d.status == "Checked In":
+					status_d = "Occupied"
+				elif arr_res_d.status == "Confirmed":
+					status_d = "Reserved"
+				elif arr_res_d.status in ("Pending Payment", "Held"):
+					status_d = "Temporary Hold"
+				else:
+					status_d = "Available"
+			else:
+				status_d = "Available"
+
+			active_res = stay_res_d or arr_res_d or dep_res_d
+			day_info = {
+				"date": str(d),
+				"reservation_status": status_d,
+				"housekeeping_status": r.housekeeping_status,
+				"is_check_in": bool(arr_res_d),
+				"is_check_out": bool(dep_res_d and not stay_res_d),
 			}
-		elif dep_res:
+			if active_res:
+				day_info["reservation"] = {
+					"name": active_res.name,
+					"guest_name": active_res.guest_name,
+					"guest_phone": active_res.guest_phone,
+					"guest_email": active_res.guest_email,
+					"source": active_res.source,
+					"source_label": _source_label(active_res.source, active_res.channel),
+					"status": active_res.status,
+					"check_in_date": str(active_res.check_in_date),
+					"check_out_date": str(active_res.check_out_date),
+					"is_check_in": bool(arr_res_d and active_res.name == arr_res_d.name),
+					"is_check_out": bool(dep_res_d and active_res.name == dep_res_d.name),
+					"advance_paid": float(active_res.advance_paid or 0),
+					"amount_after_tax": float(active_res.amount_after_tax or 0),
+				}
+			days_map[str(d)] = day_info
+
+		r_dict["days"] = days_map
+
+		# Target date specific indicators & backwards compatibility
+		target_str = str(target_date)
+		day_target = days_map.get(target_str, {})
+		primary_res_status = day_target.get("reservation_status", "Available")
+
+		# If date range requested, determine range availability status
+		if to_date and end_date > target_date:
+			all_statuses = [days_map[str(d)]["reservation_status"] for d in dates_list]
+			if "Occupied" in all_statuses:
+				range_status = "Occupied"
+			elif "Reserved" in all_statuses:
+				range_status = "Reserved"
+			elif "Temporary Hold" in all_statuses:
+				range_status = "Temporary Hold"
+			elif "Blocked" in all_statuses:
+				range_status = "Blocked"
+			elif "Out of Service" in all_statuses:
+				range_status = "Out of Service"
+			else:
+				range_status = "Available"
+			r_dict["reservation_status"] = range_status
+		else:
+			r_dict["reservation_status"] = primary_res_status
+
+		# Keep housekeeping status strictly separate
+		r_dict["housekeeping_status"] = r.housekeeping_status
+
+		# Occupancy status for backwards compatibility
+		if r_dict["reservation_status"] == "Occupied":
+			r_dict["occupancy_status"] = "Occupied"
+		elif r_dict["reservation_status"] in ("Reserved", "Temporary Hold"):
+			r_dict["occupancy_status"] = "Reserved"
+		else:
+			r_dict["occupancy_status"] = "Vacant"
+
+		# Find primary reservation details for target date (or first active in range)
+		res_detail = day_target.get("reservation")
+		if not res_detail and to_date and end_date > target_date:
+			for d in dates_list:
+				if days_map[str(d)].get("reservation"):
+					res_detail = days_map[str(d)]["reservation"]
+					break
+		r_dict["reservation_details"] = res_detail
+
+		# Reconstruct stay & arrival for existing drawer/action workflows
+		blk_target = next((b for b in room_blocks if getdate(b.from_date) <= target_date < getdate(b.to_date)), None)
+		arr_res_target = next((res for res in room_res if getdate(res.check_in_date) == target_date and res.status in ("Confirmed", "Checked In", "Checked Out")), None)
+		dep_res_target = next((res for res in room_res if getdate(res.check_out_date) == target_date), None)
+		stay_res_target = next((res for res in room_res if ((getdate(res.check_in_date) <= target_date < getdate(res.check_out_date)) or (res.is_day_use and getdate(res.check_in_date) == target_date) or (is_today and res.status == "Checked In"))), None)
+
+		if stay_res_target:
 			r_dict["stay"] = {
-				"reservation": dep_res.name,
-				"guest_name": dep_res.guest_name,
-				"surname": _surname(dep_res.guest_name),
-				"check_in_date": str(dep_res.check_in_date),
-				"check_out_date": str(dep_res.check_out_date),
+				"reservation": stay_res_target.name,
+				"guest_name": stay_res_target.guest_name,
+				"surname": _surname(stay_res_target.guest_name),
+				"check_in_date": str(stay_res_target.check_in_date),
+				"check_out_date": str(stay_res_target.check_out_date),
+				"departing_today": getdate(stay_res_target.check_out_date) <= target_date,
+				"day_use": bool(stay_res_target.is_day_use),
+			}
+		elif dep_res_target:
+			r_dict["stay"] = {
+				"reservation": dep_res_target.name,
+				"guest_name": dep_res_target.guest_name,
+				"surname": _surname(dep_res_target.guest_name),
+				"check_in_date": str(dep_res_target.check_in_date),
+				"check_out_date": str(dep_res_target.check_out_date),
 				"departing_today": True,
-				"day_use": bool(dep_res.is_day_use),
+				"day_use": bool(dep_res_target.is_day_use),
 			}
 		else:
 			r_dict["stay"] = None
 
-		# Assemble arrival payload
-		if arr_res:
+		if arr_res_target:
 			r_dict["arrival"] = {
-				"reservation": arr_res.name,
-				"guest_name": arr_res.guest_name,
-				"surname": _surname(arr_res.guest_name),
-				"eta": str(arr_res.eta)[:5] if arr_res.eta else None,
+				"reservation": arr_res_target.name,
+				"guest_name": arr_res_target.guest_name,
+				"surname": _surname(arr_res_target.guest_name),
+				"eta": str(arr_res_target.eta)[:5] if arr_res_target.eta else None,
 			}
 		else:
 			r_dict["arrival"] = None
 
 		r_dict["block"] = {
-			"name": blk.name, "reason": blk.reason,
-			"from_date": str(blk.from_date), "to_date": str(blk.to_date),
-			"note": blk.note,
-		} if blk else None
+			"name": blk_target.name, "reason": blk_target.reason,
+			"from_date": str(blk_target.from_date), "to_date": str(blk_target.to_date),
+			"note": blk_target.note,
+		} if blk_target else None
 
 		r_dict["task"] = {
 			"name": t.name, "type": t.task_type, "status": t.status,
@@ -242,62 +384,31 @@ def rooms_board(property: str, date: str | None = None):
 			"assignee": names.get(t.assigned_to_user) or t.assigned_to_user,
 		} if t else None
 
-		# Determine occupancy status on target_date:
-		if is_today:
-			if stay_res and stay_res.status == "Checked In":
-				r_dict["occupancy_status"] = "Occupied"
-			elif arr_res and arr_res.status == "Confirmed":
-				r_dict["occupancy_status"] = "Reserved"
-			else:
-				r_dict["occupancy_status"] = "Vacant"
-		elif target_date < today:
-			if stay_res:
-				r_dict["occupancy_status"] = "Occupied"
-			elif arr_res:
-				r_dict["occupancy_status"] = "Reserved"
-			else:
-				r_dict["occupancy_status"] = "Vacant"
-		else: # future
-			if stay_res and getdate(stay_res.check_in_date) < target_date:
-				r_dict["occupancy_status"] = "Occupied"
-			elif arr_res:
-				r_dict["occupancy_status"] = "Reserved"
-			elif stay_res:
-				r_dict["occupancy_status"] = "Occupied"
-			else:
-				r_dict["occupancy_status"] = "Vacant"
-
-		# Determine housekeeping status on target_date:
-		if blk:
-			r_dict["housekeeping_status"] = "Out of Order"
-		elif r.housekeeping_status in ("Maintenance", "Out of Order"):
-			r_dict["housekeeping_status"] = r.housekeeping_status
-		elif is_today:
-			r_dict["housekeeping_status"] = r.housekeeping_status
-		elif target_date > today:
-			r_dict["housekeeping_status"] = "Dirty" if (dep_res and not stay_res) else ("Clean" if r.housekeeping_status not in ("Maintenance", "Out of Order") else r.housekeeping_status)
-		else: # historical
-			r_dict["housekeeping_status"] = "Dirty" if (dep_res and not stay_res) else "Clean"
-
 		board_rooms.append(r_dict)
 
 	summary = {
 		"total": len(board_rooms),
-		"available": sum(1 for br in board_rooms if br["occupancy_status"] != "Occupied" and not br.get("block") and br["housekeeping_status"] in ("Clean", "Inspected", "Ready")),
-		"occupied": sum(1 for br in board_rooms if br["occupancy_status"] == "Occupied"),
-		"arrivals": sum(1 for br in board_rooms if bool(br.get("arrival")) or br["occupancy_status"] == "Reserved"),
-		"departures": sum(1 for br in board_rooms if bool(br.get("stay") and br["stay"].get("departing_today"))),
+		"available": sum(1 for br in board_rooms if br["reservation_status"] == "Available"),
+		"reserved": sum(1 for br in board_rooms if br["reservation_status"] == "Reserved"),
+		"occupied": sum(1 for br in board_rooms if br["reservation_status"] == "Occupied"),
+		"temporary_hold": sum(1 for br in board_rooms if br["reservation_status"] == "Temporary Hold"),
+		"blocked": sum(1 for br in board_rooms if br["reservation_status"] == "Blocked"),
+		"out_of_service": sum(1 for br in board_rooms if br["reservation_status"] == "Out of Service"),
+		"arrivals": sum(1 for br in board_rooms if bool(br.get("arrival"))),
+		"departures": sum(1 for br in board_rooms if bool(br.get("stay") and br["stay"].get("departing_today")) or bool(br.get("reservation_details") and br["reservation_details"].get("is_check_out"))),
 		"dirty": sum(1 for br in board_rooms if br["housekeeping_status"] == "Dirty"),
 		"clean": sum(1 for br in board_rooms if br["housekeeping_status"] == "Clean"),
 		"inspected": sum(1 for br in board_rooms if br["housekeeping_status"] in ("Inspected", "Ready")),
 		"cleaning": sum(1 for br in board_rooms if br["housekeeping_status"] == "Cleaning in Progress" or (br.get("task") and br["task"].get("status") == "In Progress")),
 		"maintenance": sum(1 for br in board_rooms if br["housekeeping_status"] == "Maintenance" or (br.get("task") and br["task"].get("type") == "Maintenance")),
-		"out_of_service": sum(1 for br in board_rooms if bool(br.get("block")) or br["housekeeping_status"] == "Out of Order"),
 	}
 
 	return {
 		"date": str(target_date),
+		"to_date": str(end_date),
 		"today": str(today),
+		"view": view,
+		"dates": date_strings,
 		"rooms": board_rooms,
 		"room_types": [{"name": k, "room_type_name": v} for k, v in
 		               sorted(rt_names.items(), key=lambda kv: kv[1] or "")],

@@ -7,19 +7,27 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useOutletContext, useSearchParams } from "react-router-dom"
 import {
   BedDouble,
+  ChevronLeft,
+  ChevronRight,
+  Globe,
   Lock,
   LogIn,
   LogOut,
   RefreshCw,
   Search,
+  User,
 } from "lucide-react"
 import type { ShellContext } from "../AppShell"
-import { getRoomsBoard, type BoardRoom, type RoomsBoard } from "../lib/rooms"
+import {
+  getRoomsBoard,
+  type BoardRoom,
+  type RoomsBoard,
+} from "../lib/rooms"
 import { serverError } from "../lib/resource"
 import { useT, t as translate } from "../lib/i18n"
 import { cn } from "../lib/utils"
 import { Button } from "../components/ui/button"
-import RoomDrawer, { HK_TONE } from "../components/RoomDrawer"
+import RoomDrawer from "../components/RoomDrawer"
 import RoomInsights from "../components/RoomInsights"
 import CheckOutDialog from "../components/CheckOutDialog"
 import CheckInDialog from "../components/CheckInDialog"
@@ -35,37 +43,76 @@ function formatYMD(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+function parseYMD(str: string): Date {
+  const [y, m, d] = str.split("-").map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function addDaysYMD(ymd: string, days: number): string {
+  const dt = parseYMD(ymd)
+  dt.setDate(dt.getDate() + days)
+  return formatYMD(dt)
+}
+
+function formatDateDisplay(ymd: string): string {
+  try {
+    const dt = parseYMD(ymd)
+    return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+  } catch {
+    return ymd
+  }
+}
+
+function formatDayOfWeek(ymd: string): string {
+  try {
+    const dt = parseYMD(ymd)
+    return dt.toLocaleDateString(undefined, { weekday: "short" })
+  } catch {
+    return ""
+  }
+}
+
 type StatusFilter =
   | "all"
   | "available"
   | "reserved"
   | "occupied"
+  | "temporary_hold"
+  | "blocked"
+  | "online"
+  | "direct"
+  | "walk_in"
   | "dirty"
   | "cleaning"
   | "clean"
   | "inspected"
   | "out_of_order"
   | "maintenance"
-  | "vacant_ready"
   | "arriving"
   | "departing"
-  | "out"
   | "task"
 
 function matches(r: BoardRoom, f: StatusFilter) {
   switch (f) {
     case "available":
-    case "vacant_ready":
-      return (
-        r.occupancy_status !== "Occupied" &&
-        !r.block &&
-        ["Clean", "Inspected", "Ready"].includes(r.housekeeping_status)
-      )
+      return r.reservation_status === "Available"
     case "reserved":
-    case "arriving":
-      return !!r.arrival || r.occupancy_status === "Reserved"
+      return r.reservation_status === "Reserved" || (!!r.arrival && r.reservation_status !== "Occupied")
     case "occupied":
-      return r.occupancy_status === "Occupied"
+      return r.reservation_status === "Occupied"
+    case "temporary_hold":
+      return r.reservation_status === "Temporary Hold"
+    case "blocked":
+      return r.reservation_status === "Blocked" || !!r.block
+    case "online":
+      return (
+        r.reservation_details?.source_label === "Online" ||
+        r.reservation_details?.source === "Website"
+      )
+    case "direct":
+      return r.reservation_details?.source_label === "Direct"
+    case "walk_in":
+      return r.reservation_details?.source_label === "Walk-in"
     case "dirty":
       return r.housekeeping_status === "Dirty"
     case "cleaning":
@@ -78,20 +125,53 @@ function matches(r: BoardRoom, f: StatusFilter) {
     case "inspected":
       return r.housekeeping_status === "Inspected" || r.housekeeping_status === "Ready"
     case "out_of_order":
-    case "out":
-      return !!r.block || r.housekeeping_status === "Out of Order"
+      return r.reservation_status === "Out of Service" || !!r.block || r.housekeeping_status === "Out of Order"
     case "maintenance":
       return (
         r.housekeeping_status === "Maintenance" ||
         (!!r.task && r.task.type === "Maintenance")
       )
     case "departing":
-      return !!r.stay?.departing_today
+      return !!r.stay?.departing_today || !!r.reservation_details?.is_check_out
+    case "arriving":
+      return !!r.arrival || !!r.reservation_details?.is_check_in
     case "task":
       return !!r.task
     default:
       return true
   }
+}
+
+function SourceBadge({ source }: { source: string }) {
+  const { t } = useT()
+  if (source === "Online" || source === "Website") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 border border-emerald-200">
+        <Globe className="size-2.5" />
+        {t("Online")}
+      </span>
+    )
+  }
+  if (source === "Walk-in") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-800 border border-purple-200">
+        <User className="size-2.5" />
+        {t("Walk-in")}
+      </span>
+    )
+  }
+  if (source.startsWith("OTA")) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 border border-amber-200">
+        {source}
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800 border border-sky-200">
+      {t("Direct")}
+    </span>
+  )
 }
 
 export default function Rooms() {
@@ -101,28 +181,40 @@ export default function Rooms() {
   const view = params.get("view") === "insights" ? "insights" : "board"
   const open = params.get("room")
   const dateParam = params.get("date") || ""
+  const toDateParam = params.get("to_date") || ""
+  const boardViewParam = (params.get("board_view") as "daily" | "weekly" | "monthly") || "daily"
+
   const [selectedDate, setSelectedDate] = useState<string>(dateParam)
+  const [toDate, setToDate] = useState<string>(toDateParam)
+  const [boardView, setBoardView] = useState<"daily" | "weekly" | "monthly">(boardViewParam)
+
   const [board, setBoard] = useState<RoomsBoard | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState("")
   const [floor, setFloor] = useState("all")
   const [type, setType] = useState("all")
   const [status, setStatus] = useState<StatusFilter>("all")
+
   // dialogs the drawer hands off to (the drawer hides while one is open)
   const [checkingOut, setCheckingOut] = useState<string | null>(null)
   const [checkingIn, setCheckingIn] = useState<string | null>(null)
   const [moving, setMoving] = useState<{ res: string; number: string } | null>(null)
   const [drawerKey, setDrawerKey] = useState(0)
 
-  const load = useCallback((targetDate?: string) => {
-    const d = targetDate !== undefined ? targetDate : selectedDate
-    getRoomsBoard(d || undefined)
-      .then((b) => {
-        setBoard(b)
-        setError(null)
-      })
-      .catch((e) => setError(serverError(e)))
-  }, [selectedDate])
+  const load = useCallback(
+    (targetDate?: string, targetToDate?: string, targetView?: "daily" | "weekly" | "monthly") => {
+      const d = targetDate !== undefined ? targetDate : selectedDate
+      const to = targetToDate !== undefined ? targetToDate : toDate
+      const v = targetView !== undefined ? targetView : boardView
+      getRoomsBoard(d || undefined, to || undefined, v)
+        .then((b) => {
+          setBoard(b)
+          setError(null)
+        })
+        .catch((e) => setError(serverError(e)))
+    },
+    [selectedDate, toDate, boardView],
+  )
 
   useEffect(() => {
     load()
@@ -131,11 +223,13 @@ export default function Rooms() {
   }, [load, refreshKey])
 
   useEffect(() => {
-    if (dateParam !== selectedDate) {
+    if (dateParam !== selectedDate || toDateParam !== toDate || boardViewParam !== boardView) {
       setSelectedDate(dateParam)
-      load(dateParam)
+      setToDate(toDateParam)
+      setBoardView(boardViewParam)
+      load(dateParam, toDateParam, boardViewParam)
     }
-  }, [dateParam, load])
+  }, [dateParam, toDateParam, boardViewParam, load])
 
   const setParam = (k: string, v: string | null) =>
     setParams(
@@ -155,7 +249,26 @@ export default function Rooms() {
   const handleSelectDate = (newDate: string) => {
     setSelectedDate(newDate)
     setParam("date", newDate === todayStr ? null : newDate)
-    load(newDate)
+    load(newDate, toDate, boardView)
+  }
+
+  const handleRangeChange = (from: string, to: string) => {
+    setSelectedDate(from)
+    setToDate(to)
+    setParam("date", from === todayStr ? null : from)
+    setParam("to_date", to === from ? null : to)
+    load(from, to, boardView)
+  }
+
+  const handleViewChange = (v: "daily" | "weekly" | "monthly") => {
+    setBoardView(v)
+    setParam("board_view", v === "daily" ? null : v)
+    load(selectedDate, toDate, v)
+  }
+
+  const shiftDate = (days: number) => {
+    const nextDate = addDaysYMD(currentDate, days)
+    handleSelectDate(nextDate)
   }
 
   const rooms = board?.rooms ?? []
@@ -175,7 +288,9 @@ export default function Rooms() {
       (!q.trim() ||
         r.room_number.toLowerCase().includes(q.trim().toLowerCase()) ||
         (r.stay?.guest_name ?? "").toLowerCase().includes(q.trim().toLowerCase()) ||
-        (r.arrival?.guest_name ?? "").toLowerCase().includes(q.trim().toLowerCase())),
+        (r.arrival?.guest_name ?? "").toLowerCase().includes(q.trim().toLowerCase()) ||
+        (r.reservation_details?.guest_name ?? "").toLowerCase().includes(q.trim().toLowerCase()) ||
+        (r.reservation_details?.name ?? "").toLowerCase().includes(q.trim().toLowerCase())),
   )
 
   const count = (f: StatusFilter) => {
@@ -185,10 +300,15 @@ export default function Rooms() {
           return board.summary.total
         case "available":
           return board.summary.available
+        case "reserved":
+          return board.summary.reserved
         case "occupied":
           return board.summary.occupied
+        case "temporary_hold":
+          return board.summary.temporary_hold
+        case "blocked":
+          return board.summary.blocked
         case "arriving":
-        case "reserved":
           return board.summary.arrivals
         case "departing":
           return board.summary.departures
@@ -203,7 +323,6 @@ export default function Rooms() {
         case "maintenance":
           return board.summary.maintenance
         case "out_of_order":
-        case "out":
           return board.summary.out_of_service
       }
     }
@@ -213,7 +332,11 @@ export default function Rooms() {
   const chips: { id: StatusFilter; label: string }[] = [
     { id: "all", label: t("All rooms") },
     { id: "available", label: t("Available") },
+    { id: "reserved", label: t("Reserved") },
     { id: "occupied", label: t("Occupied") },
+    { id: "temporary_hold", label: t("Temporary Hold") },
+    { id: "blocked", label: t("Blocked") },
+    { id: "online", label: t("Online Bookings") },
     { id: "arriving", label: t("Expected Arrivals") },
     { id: "departing", label: t("Expected Departures") },
     { id: "dirty", label: t("Dirty") },
@@ -223,6 +346,7 @@ export default function Rooms() {
     { id: "maintenance", label: t("Maintenance") },
     { id: "out_of_order", label: t("Out of Service") },
   ]
+
   const floorLabel = (f: string) =>
     f === NO_FLOOR ? t("No floor set") : /floor/i.test(f) ? f : t("Floor {f}", { f })
   const dialogOpen = !!(checkingOut || checkingIn || moving)
@@ -233,10 +357,13 @@ export default function Rooms() {
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-zinc-900">{t("Room Board")}</h1>
           <p className="mt-0.5 text-sm text-zinc-500">
-            {t("Tap a room to change its status, see who is in it, who stayed and who cleaned it.")}
+            {t(
+              "Real-time reservation availability, housekeeping status, online bookings, and room lifecycle management.",
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Main Board vs Insights switcher */}
           <div role="tablist" className="flex rounded-lg border border-zinc-200 bg-white p-0.5">
             {(["board", "insights"] as const).map((v) => (
               <button
@@ -253,6 +380,7 @@ export default function Rooms() {
               </button>
             ))}
           </div>
+
           <Button variant="outline" className="min-h-10" onClick={() => load()} aria-label={t("Refresh")}>
             <RefreshCw className="size-4" />
           </Button>
@@ -269,25 +397,88 @@ export default function Rooms() {
         <RoomInsights onOpenRoom={(r) => setParam("room", r)} />
       ) : (
         <>
-          {/* Unified Date Filter Control with Single Day and From Date - To Date support */}
-          <div className="mb-4">
-            <DateFilterBar
-              mode="single"
-              allowModeToggle
-              date={currentDate}
-              onDateChange={handleSelectDate}
-              fromDate={params.get("from_date") || currentDate}
-              toDate={params.get("to_date") || currentDate}
-              onRangeChange={(from, to) => {
-                if (from) {
-                  handleSelectDate(from)
-                  setParam("from_date", from)
-                  setParam("to_date", to)
-                }
-              }}
-              label="Room Status Date"
-            />
+          {/* View Mode Controls: Daily | Weekly | Monthly */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                {t("View Mode")}:
+              </span>
+              <div className="flex rounded-lg border border-zinc-200 bg-zinc-100 p-0.5">
+                {(["daily", "weekly", "monthly"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => handleViewChange(m)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition",
+                      boardView === m
+                        ? "bg-white text-brand-700 shadow-sm"
+                        : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900",
+                    )}
+                  >
+                    {t(m)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick date navigators for Weekly/Monthly view */}
+            {boardView !== "daily" ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => shiftDate(boardView === "weekly" ? -7 : -30)}
+                  className="h-8 gap-1 px-2.5 text-xs"
+                >
+                  <ChevronLeft className="size-3.5" />
+                  {boardView === "weekly" ? t("Prev Week") : t("Prev Month")}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSelectDate(todayStr)}
+                  className={cn("h-8 px-2.5 text-xs", isToday && "border-brand-600 text-brand-700 font-semibold")}
+                >
+                  {t("Today")}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => shiftDate(boardView === "weekly" ? 7 : 30)}
+                  className="h-8 gap-1 px-2.5 text-xs"
+                >
+                  {boardView === "weekly" ? t("Next Week") : t("Next Month")}
+                  <ChevronRight className="size-3.5" />
+                </Button>
+                <span className="ms-2 text-xs font-medium text-zinc-600">
+                  {board?.dates && board.dates.length > 0 && (
+                    <>
+                      {formatDateDisplay(board.dates[0])} – {formatDateDisplay(board.dates[board.dates.length - 1])}
+                      {" "}({board.dates.length} {t("days")})
+                    </>
+                  )}
+                </span>
+              </div>
+            ) : (
+              <div className="text-xs text-zinc-500 font-medium">
+                {isToday ? t("Showing status for Today") : t("Showing status for {d}", { d: currentDate })}
+              </div>
+            )}
           </div>
+
+          {/* Unified Date Filter Control with Single Day and From Date - To Date support */}
+          {boardView === "daily" && (
+            <div className="mb-4">
+              <DateFilterBar
+                mode="single"
+                allowModeToggle
+                date={currentDate}
+                onDateChange={handleSelectDate}
+                fromDate={selectedDate || currentDate}
+                toDate={toDate || currentDate}
+                onRangeChange={handleRangeChange}
+                label="Room Status Date"
+              />
+            </div>
+          )}
 
           <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <label className="relative block min-w-0">
@@ -295,8 +486,8 @@ export default function Rooms() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder={t("Room number or guest")}
-                aria-label={t("Room number or guest")}
+                placeholder={t("Room number, guest, or booking ref")}
+                aria-label={t("Room number, guest, or booking ref")}
                 className="min-h-11 w-full rounded-lg border border-zinc-300 bg-white ps-9 pe-3 text-base"
               />
             </label>
@@ -327,6 +518,7 @@ export default function Rooms() {
               ))}
             </select>
           </div>
+
           <div className="mb-4 flex flex-wrap gap-1.5">
             {chips.map((c) => (
               <button
@@ -334,14 +526,14 @@ export default function Rooms() {
                 onClick={() => setStatus(c.id)}
                 aria-pressed={status === c.id}
                 className={cn(
-                  "min-h-10 rounded-full border px-3 text-sm font-medium",
+                  "min-h-10 rounded-full border px-3 text-sm font-medium transition",
                   status === c.id
-                    ? "border-brand-600 bg-brand-600 text-white"
+                    ? "border-brand-600 bg-brand-600 text-white shadow-xs"
                     : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400",
                 )}
               >
                 {translate(c.label)}
-                <span className="ms-1.5 tabular-nums opacity-75">{count(c.id)}</span>
+                <span className="ms-1.5 tabular-nums opacity-85 font-semibold">({count(c.id)})</span>
               </button>
             ))}
           </div>
@@ -352,14 +544,15 @@ export default function Rooms() {
             <p className="rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
               {t("No room matches these filters.")}
             </p>
-          ) : (
+          ) : boardView === "daily" ? (
+            /* Daily View: Floor-by-floor Room Cards */
             <div className="space-y-5">
               {floors
                 .filter((f) => shown.some((r) => floorOf(r) === f))
                 .map((f) => (
                   <section key={f} className="min-w-0">
                     <h2 className="mb-2 text-sm font-semibold text-zinc-600">{floorLabel(f)}</h2>
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2.5">
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2.5">
                       {shown
                         .filter((r) => floorOf(r) === f)
                         .map((r) => (
@@ -369,7 +562,16 @@ export default function Rooms() {
                   </section>
                 ))}
             </div>
+          ) : (
+            /* Weekly / Monthly Matrix Grid View */
+            <MatrixView
+              board={board}
+              dates={board.dates || [currentDate]}
+              rooms={shown}
+              onOpenRoom={(roomName) => setParam("room", roomName)}
+            />
           )}
+
           <Legend isToday={isToday} />
         </>
       )}
@@ -426,91 +628,390 @@ export default function Rooms() {
 
 function RoomTile({ r, onOpen }: { r: BoardRoom; onOpen: () => void }) {
   const { t } = useT()
-  const occupied = r.occupancy_status === "Occupied"
-  const out = !!r.block || r.housekeeping_status === "Out of Order"
-  const who = r.stay?.surname ?? r.arrival?.surname
+  const resStatus = r.reservation_status || "Available"
+  const occupied = resStatus === "Occupied"
+  const out = resStatus === "Out of Service" || !!r.block || r.housekeeping_status === "Out of Order"
+  const reserved = resStatus === "Reserved"
+  const hold = resStatus === "Temporary Hold"
+  const blocked = resStatus === "Blocked"
+
+  // Guest & Reservation info
+  const resDetail = r.reservation_details
+  const guestName = resDetail?.guest_name || r.stay?.guest_name || r.arrival?.guest_name
+  const bookingRef = resDetail?.name || r.stay?.reservation || r.arrival?.reservation
+  const sourceLabel = resDetail?.source_label || (r.stay || r.arrival ? "Direct" : null)
+  const isCheckIn = resDetail?.is_check_in ?? !!r.arrival
+  const isCheckOut = resDetail?.is_check_out ?? !!r.stay?.departing_today
+
   return (
-    <button
-      type="button"
+    <div
       onClick={onOpen}
-      aria-label={t("Room {n}", { n: r.room_number })}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      aria-label={t("Room {n} - {status}", { n: r.room_number, status: resStatus })}
       className={cn(
-        "flex min-h-[6.5rem] w-full min-w-0 flex-col rounded-xl border-2 p-2.5 text-start transition-transform",
-        "hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600",
+        "group relative flex min-h-[9.5rem] w-full min-w-0 flex-col rounded-xl border-2 p-3 text-start transition-all cursor-pointer shadow-xs",
+        "hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600",
         occupied
-          ? "border-brand-700 bg-brand-700 text-white"
-          : out
-            ? "border-rose-400 bg-rose-50 text-rose-900"
-            : HK_TONE[r.housekeeping_status],
+          ? "border-indigo-400 bg-indigo-50/40"
+          : reserved
+            ? "border-sky-400 bg-sky-50/40"
+            : hold
+              ? "border-amber-400 bg-amber-50/40"
+              : blocked
+                ? "border-rose-400 bg-rose-50/50"
+                : out
+                  ? "border-zinc-400 bg-zinc-100"
+                  : "border-zinc-200 bg-white hover:border-zinc-300",
       )}
     >
-      <div className="flex w-full items-start justify-between gap-1">
-        <span className="text-xl font-bold leading-none tabular-nums">{r.room_number}</span>
-        <span className="flex shrink-0 items-center gap-1">
-          {out && <Lock className="size-4" aria-label={t("Out of service")} />}
-          {occupied && <BedDouble className="size-4" aria-label={t("Occupied")} />}
-        </span>
-      </div>
-      <div className="mt-1 w-full truncate text-xs opacity-80">{r.room_type_name}</div>
-      <div className="mt-auto w-full pt-1">
-        {who && <div className="truncate text-sm font-semibold">{who}</div>}
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="truncate text-[11px] font-medium uppercase tracking-wide opacity-90">
-            {r.block ? t("Out of service") : t(r.housekeeping_status)}
+      {/* Top row: Room Number, Room Type, Out/Occupied Icon */}
+      <div className="flex w-full items-start justify-between gap-1.5">
+        <div>
+          <span className="text-xl font-bold leading-none tracking-tight text-zinc-900 tabular-nums">
+            {r.room_number}
           </span>
-          {r.stay?.departing_today && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-0.5 rounded px-1 text-[10px] font-semibold",
-                occupied ? "bg-white/20" : "bg-amber-200 text-amber-900",
-              )}
-            >
-              <LogOut className="size-3" aria-hidden />
-              {t("Dep")}
-            </span>
-          )}
-          {r.arrival && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-0.5 rounded px-1 text-[10px] font-semibold",
-                occupied ? "bg-white/20" : "bg-sky-200 text-sky-900",
-              )}
-            >
-              <LogIn className="size-3" aria-hidden />
-              {t("Arr")}
-            </span>
-          )}
+          <div className="mt-0.5 truncate text-[11px] font-medium text-zinc-500 max-w-[7rem]">
+            {r.room_type_name}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {out && <Lock className="size-3.5 text-zinc-600" aria-label={t("Out of service")} />}
+          {occupied && <BedDouble className="size-3.5 text-indigo-700" aria-label={t("Occupied")} />}
         </div>
       </div>
-    </button>
+
+      {/* Primary Badges: Reservation Status & Housekeeping Status */}
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        {/* Reservation Status Pill */}
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border",
+            resStatus === "Available" && "bg-emerald-100 text-emerald-800 border-emerald-300",
+            resStatus === "Reserved" && "bg-sky-100 text-sky-800 border-sky-300",
+            resStatus === "Occupied" && "bg-indigo-100 text-indigo-900 border-indigo-300",
+            resStatus === "Temporary Hold" && "bg-amber-100 text-amber-900 border-amber-300",
+            resStatus === "Blocked" && "bg-rose-100 text-rose-900 border-rose-300",
+            resStatus === "Out of Service" && "bg-zinc-200 text-zinc-800 border-zinc-400",
+          )}
+        >
+          <span
+            className={cn(
+              "size-1.5 rounded-full shrink-0",
+              resStatus === "Available" && "bg-emerald-600",
+              resStatus === "Reserved" && "bg-sky-600",
+              resStatus === "Occupied" && "bg-indigo-600",
+              resStatus === "Temporary Hold" && "bg-amber-600",
+              resStatus === "Blocked" && "bg-rose-600",
+              resStatus === "Out of Service" && "bg-zinc-600",
+            )}
+          />
+          {t(resStatus)}
+        </span>
+
+        {/* Housekeeping Status Pill (Always distinct and separate) */}
+        <span
+          className={cn(
+            "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium border",
+            r.housekeeping_status === "Clean" && "bg-emerald-50 text-emerald-700 border-emerald-200",
+            r.housekeeping_status === "Dirty" && "bg-amber-50 text-amber-700 border-amber-200",
+            (r.housekeeping_status === "Inspected" || r.housekeeping_status === "Ready") &&
+              "bg-sky-50 text-sky-700 border-sky-200",
+            r.housekeeping_status === "Cleaning in Progress" && "bg-blue-50 text-blue-700 border-blue-200",
+            r.housekeeping_status === "Maintenance" && "bg-purple-50 text-purple-700 border-purple-200",
+            r.housekeeping_status === "Out of Order" && "bg-rose-50 text-rose-700 border-rose-200",
+          )}
+        >
+          {t(r.housekeeping_status)}
+        </span>
+      </div>
+
+      {/* Guest / Reservation Information */}
+      <div className="mt-auto w-full pt-2">
+        {guestName ? (
+          <div className="space-y-0.5">
+            <div className="truncate text-xs font-semibold text-zinc-900" title={guestName}>
+              {guestName}
+            </div>
+            {bookingRef && (
+              <div className="truncate text-[10px] text-zinc-500 font-mono" title={bookingRef}>
+                {bookingRef}
+              </div>
+            )}
+          </div>
+        ) : blocked ? (
+          <div className="text-[11px] font-medium text-rose-700 truncate">
+            {r.block?.reason || t("Room Blocked")}
+          </div>
+        ) : out ? (
+          <div className="text-[11px] font-medium text-zinc-600 truncate">{t("Out of Service")}</div>
+        ) : null}
+
+        {/* Bottom row: Source Indicator & Check-in/Check-out indicators */}
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1">
+          {sourceLabel ? (
+            <SourceBadge source={sourceLabel} />
+          ) : (
+            <span className="text-[10px] text-zinc-400">{t("Free")}</span>
+          )}
+
+          <div className="flex items-center gap-1 ms-auto">
+            {isCheckIn && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-sky-100 border border-sky-300 px-1 text-[9px] font-bold text-sky-800">
+                <LogIn className="size-2.5" />
+                {t("Arr")}
+              </span>
+            )}
+            {isCheckOut && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 border border-amber-300 px-1 text-[9px] font-bold text-amber-900">
+                <LogOut className="size-2.5" />
+                {t("Dep")}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MatrixView({
+  board,
+  dates,
+  rooms,
+  onOpenRoom,
+}: {
+  board: RoomsBoard
+  dates: string[]
+  rooms: BoardRoom[]
+  onOpenRoom: (name: string) => void
+}) {
+  const { t } = useT()
+  const todayStr = board.today || formatYMD(new Date())
+
+  return (
+    <div className="w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+      <div className="max-h-[70vh] overflow-auto">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead className="sticky top-0 z-20 bg-zinc-50 border-b border-zinc-200 shadow-xs">
+            <tr>
+              <th className="sticky start-0 z-30 min-w-[10rem] bg-zinc-50 px-3 py-2.5 font-semibold text-zinc-700 border-e border-zinc-200">
+                {t("Room")}
+              </th>
+              {dates.map((d) => {
+                const isT = d === todayStr
+                return (
+                  <th
+                    key={d}
+                    className={cn(
+                      "min-w-[6.5rem] px-2 py-2 text-center font-medium border-e border-zinc-200 last:border-e-0",
+                      isT ? "bg-brand-50/70 text-brand-900 font-bold" : "text-zinc-600",
+                    )}
+                  >
+                    <div className="text-[10px] uppercase tracking-wider">{formatDayOfWeek(d)}</div>
+                    <div className="text-xs font-semibold tabular-nums">{formatDateDisplay(d)}</div>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-200 font-sans">
+            {rooms.map((r) => (
+              <tr key={r.name} className="hover:bg-zinc-50/60 transition-colors">
+                <td
+                  onClick={() => onOpenRoom(r.name)}
+                  className="sticky start-0 z-10 bg-white px-3 py-2 border-e border-zinc-200 cursor-pointer hover:bg-zinc-100"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-sm font-bold text-zinc-900">{r.room_number}</span>
+                    <span className="text-[10px] text-zinc-400 font-normal truncate max-w-[5.5rem]">
+                      {r.room_type_name}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 font-medium">
+                    {r.housekeeping_status}
+                  </div>
+                </td>
+                {dates.map((d) => {
+                  const day = r.days?.[d]
+                  const status = day?.reservation_status || "Available"
+                  const res = day?.reservation
+                  const isCheckIn = day?.is_check_in
+                  const isCheckOut = day?.is_check_out
+                  const isT = d === todayStr
+
+                  return (
+                    <td
+                      key={d}
+                      onClick={() => onOpenRoom(r.name)}
+                      title={`${r.room_number} (${d}): ${status}${
+                        res ? ` - ${res.guest_name} [${res.source_label || res.source}] (${res.name})` : ""
+                      }`}
+                      className={cn(
+                        "p-1.5 border-e border-zinc-200 last:border-e-0 cursor-pointer text-center align-top transition-colors",
+                        isT && "bg-brand-50/20",
+                        status === "Available" && "hover:bg-emerald-50/50",
+                        status === "Reserved" && "bg-sky-50/60 hover:bg-sky-100/60",
+                        status === "Occupied" && "bg-indigo-50/60 hover:bg-indigo-100/60",
+                        status === "Temporary Hold" && "bg-amber-50/60 hover:bg-amber-100/60",
+                        status === "Blocked" && "bg-rose-50/60 hover:bg-rose-100/60",
+                        status === "Out of Service" && "bg-zinc-100 hover:bg-zinc-200/60",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "flex flex-col gap-0.5 rounded p-1 text-[10px] h-full min-h-[3.25rem] border",
+                          status === "Available" &&
+                            "border-dashed border-emerald-300 text-emerald-700 bg-emerald-50/40",
+                          status === "Reserved" && "border-sky-300 text-sky-900 bg-sky-100/80 font-medium",
+                          status === "Occupied" && "border-indigo-300 text-indigo-900 bg-indigo-100/80 font-medium",
+                          status === "Temporary Hold" &&
+                            "border-amber-300 text-amber-900 bg-amber-100/80 font-medium",
+                          status === "Blocked" && "border-rose-300 text-rose-900 bg-rose-100/80",
+                          status === "Out of Service" && "border-zinc-300 text-zinc-700 bg-zinc-200",
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-0.5">
+                          <span className="font-bold text-[9px] uppercase tracking-wider truncate">
+                            {status === "Available"
+                              ? "Avail"
+                              : status === "Temporary Hold"
+                                ? "Hold"
+                                : status}
+                          </span>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {isCheckIn && (
+                              <span className="rounded bg-sky-200 px-0.5 text-[8px] font-bold text-sky-900">
+                                Arr
+                              </span>
+                            )}
+                            {isCheckOut && (
+                              <span className="rounded bg-amber-200 px-0.5 text-[8px] font-bold text-amber-900">
+                                Dep
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {res && (
+                          <div className="mt-0.5 truncate text-[10px] font-semibold text-start">
+                            {res.guest_name}
+                          </div>
+                        )}
+
+                        {res && (
+                          <div className="mt-auto flex items-center justify-between text-[9px]">
+                            <span className="opacity-75">{res.source_label}</span>
+                            <span className="font-mono text-[8px] opacity-60">
+                              {res.name.replace(/^RES-/, "")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="sticky bottom-0 z-20 bg-zinc-50 border-t-2 border-zinc-300 font-semibold text-[11px]">
+            <tr>
+              <td className="sticky start-0 z-30 bg-zinc-50 px-3 py-2 text-zinc-700 border-e border-zinc-200">
+                {t("Total Occupied / Total")}
+              </td>
+              {dates.map((d) => {
+                const total = rooms.length
+                const occ = rooms.filter(
+                  (r) => r.days?.[d]?.reservation_status === "Occupied",
+                ).length
+                const res = rooms.filter(
+                  (r) => r.days?.[d]?.reservation_status === "Reserved",
+                ).length
+                const avail = rooms.filter(
+                  (r) => r.days?.[d]?.reservation_status === "Available",
+                ).length
+
+                return (
+                  <td key={d} className="px-2 py-1.5 text-center border-e border-zinc-200 last:border-e-0">
+                    <div className="text-zinc-900 font-bold tabular-nums">
+                      {occ + res} / {total}
+                    </div>
+                    <div className="text-[9px] text-zinc-500 font-normal">
+                      {res > 0 && <span className="text-sky-700 font-medium">{res} res · </span>}
+                      <span className="text-emerald-700 font-medium">{avail} free</span>
+                    </div>
+                  </td>
+                )
+              })}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
   )
 }
 
 function Legend({ isToday }: { isToday: boolean }) {
   const { t } = useT()
-  const items: [string, string][] = [
-    [t("Clean"), "bg-emerald-100 border-emerald-300"],
-    [t("Inspected"), "bg-sky-100 border-sky-300"],
-    [t("Cleaning in Progress"), "bg-blue-100 border-blue-400"],
-    [t("Dirty"), "bg-amber-100 border-amber-300"],
-    [t("Maintenance"), "bg-purple-100 border-purple-300"],
-    [t("Out of service"), "bg-rose-100 border-rose-400"],
-    [t("Occupied"), "bg-brand-700 border-brand-700"],
+  const resItems: [string, string][] = [
+    [t("Available"), "bg-emerald-100 border-emerald-300 text-emerald-800"],
+    [t("Reserved"), "bg-sky-100 border-sky-300 text-sky-800"],
+    [t("Occupied"), "bg-indigo-100 border-indigo-300 text-indigo-900"],
+    [t("Temporary Hold"), "bg-amber-100 border-amber-300 text-amber-900"],
+    [t("Blocked"), "bg-rose-100 border-rose-300 text-rose-800"],
+    [t("Out of Service"), "bg-zinc-200 border-zinc-400 text-zinc-800"],
   ]
+  const hkItems: [string, string][] = [
+    [t("Clean"), "bg-emerald-50 border-emerald-200"],
+    [t("Dirty"), "bg-amber-50 border-amber-200"],
+    [t("Inspected"), "bg-sky-50 border-sky-200"],
+    [t("Cleaning in Progress"), "bg-blue-50 border-blue-200"],
+    [t("Maintenance"), "bg-purple-50 border-purple-200"],
+  ]
+
   return (
-    <div className="mt-5 flex flex-wrap items-center gap-3 text-xs text-zinc-500">
-      {items.map(([label, cls]) => (
-        <span key={label} className="inline-flex items-center gap-1.5">
-          <span className={cn("size-3.5 rounded border", cls)} />
-          {translate(label)}
+    <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs space-y-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-600">
+        <span className="font-semibold text-zinc-700">{t("Reservation Status")}:</span>
+        {resItems.map(([label, cls]) => (
+          <span key={label} className="inline-flex items-center gap-1.5">
+            <span className={cn("size-3 rounded border", cls)} />
+            {translate(label)}
+          </span>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-600 border-t border-zinc-100 pt-2.5">
+        <span className="font-semibold text-zinc-700">{t("Housekeeping Status")}:</span>
+        {hkItems.map(([label, cls]) => (
+          <span key={label} className="inline-flex items-center gap-1.5">
+            <span className={cn("size-3 rounded border", cls)} />
+            {translate(label)}
+          </span>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500 border-t border-zinc-100 pt-2.5">
+        <span className="font-semibold text-zinc-700">{t("Indicators")}:</span>
+        <span className="inline-flex items-center gap-1 rounded bg-sky-100 border border-sky-300 px-1.5 py-0.5 font-bold text-sky-800 text-[10px]">
+          <LogIn className="size-3" /> {isToday ? t("Arr = Arriving Today") : t("Arr = Check-in Date")}
         </span>
-      ))}
-      <span className="inline-flex items-center gap-1">
-        <LogIn className="size-3.5" /> {isToday ? t("Arr = arriving today") : t("Arr = arriving on date")}
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <LogOut className="size-3.5" /> {isToday ? t("Dep = leaving today") : t("Dep = leaving on date")}
-      </span>
+        <span className="inline-flex items-center gap-1 rounded bg-amber-100 border border-amber-300 px-1.5 py-0.5 font-bold text-amber-900 text-[10px]">
+          <LogOut className="size-3" /> {isToday ? t("Dep = Departing Today") : t("Dep = Check-out Date")}
+        </span>
+        <span className="inline-flex items-center gap-1 rounded bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 font-semibold text-emerald-800 text-[10px]">
+          <Globe className="size-3" /> {t("Online Booking")}
+        </span>
+        <span className="inline-flex items-center gap-1 rounded bg-purple-100 border border-purple-200 px-1.5 py-0.5 font-semibold text-purple-800 text-[10px]">
+          <User className="size-3" /> {t("Walk-in")}
+        </span>
+      </div>
     </div>
   )
 }
