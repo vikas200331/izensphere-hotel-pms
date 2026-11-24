@@ -669,10 +669,10 @@ export default function PublicBooking() {
     setMetaTag(
       "description",
       p.meta_description ||
-        t("{property} in {city}: {count} room types from {price} per night. Best-rate direct booking, pay at hotel. {description}", {
-          property: p.property_name, city: p.city, count: data.room_types.length,
-          price: money(minPrice), description: p.description ?? "",
-        }).slice(0, 158),
+      t("{property} in {city}: {count} room types from {price} per night. Best-rate direct booking, pay at hotel. {description}", {
+        property: p.property_name, city: p.city, count: data.room_types.length,
+        price: money(minPrice), description: p.description ?? "",
+      }).slice(0, 158),
     )
     if (p.og_image) {
       setMetaTag("og:image", p.og_image)
@@ -897,8 +897,10 @@ export default function PublicBooking() {
           : t("Book now")
   const locations = data.locations?.length
     ? data.locations
-    : [{ name: p.property_name, address: p.address_line, google_maps_url: null,
-         latitude: p.latitude, longitude: p.longitude, room_types: [] }]
+    : [{
+      name: p.property_name, address: p.address_line, google_maps_url: null,
+      latitude: p.latitude, longitude: p.longitude, room_types: []
+    }]
 
   // Property photos for the hero: the hero image first, then the gallery,
   // then room / site covers so a page with any photo never shows a blank.
@@ -954,8 +956,10 @@ export default function PublicBooking() {
       ? [{ icon: ShieldCheck, text: cp.description }]
       : p.has_cancellation_tiers ? [] : p.cancellation_fee === "None" || !p.free_cancel_days
         ? [{ icon: ShieldCheck, text: t("Free cancellation") }]
-        : [{ icon: ShieldCheck, text: tn(p.free_cancel_days,
-            "Free cancellation up to {n} day before arrival", "Free cancellation up to {n} days before arrival") }]),
+        : [{
+          icon: ShieldCheck, text: tn(p.free_cancel_days,
+            "Free cancellation up to {n} day before arrival", "Free cancellation up to {n} days before arrival")
+        }]),
     ...(p.payment_mode === "Pay at hotel" ? [{ icon: Wallet, text: t("No payment today, pay at the property") }] : []),
     ...(p.booking_mode !== "Request to Book" ? [{ icon: Zap, text: t("Instant confirmation") }] : []),
     { icon: Clock, text: t("Check-in from {in}, check-out by {out}", { in: p.checkin_time.slice(0, 5), out: p.checkout_time.slice(0, 5) }) },

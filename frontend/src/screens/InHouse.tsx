@@ -127,27 +127,21 @@ export default function InHouse() {
           <p className="text-xs text-zinc-500">{t("Arrivals, guests in house and departures, in one list.")}</p>
         </div>
         <div>
-          {tab === "arrivals" ? (
-            <DateFilterBar
-              mode="range"
-              fromDate={date}
-              toDate={until || date}
-              onRangeChange={(from, to) =>
-                setQuery({
-                  date: from || today,
-                  until: to && to !== from ? to : "",
-                })
-              }
-              compact
-            />
-          ) : (
-            <DateFilterBar
-              mode="single"
-              date={date}
-              onDateChange={(d) => setQuery({ date: d, until: "" })}
-              compact
-            />
-          )}
+          <DateFilterBar
+            mode={tab === "arrivals" || until ? "range" : "single"}
+            allowModeToggle
+            date={date}
+            onDateChange={(d) => setQuery({ date: d, until: "" })}
+            fromDate={date}
+            toDate={until || date}
+            onRangeChange={(from, to) =>
+              setQuery({
+                date: from || today,
+                until: to && to !== from ? to : "",
+              })
+            }
+            compact
+          />
         </div>
       </div>
 

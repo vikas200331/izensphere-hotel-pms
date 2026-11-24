@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useMemo, useState, useEffect } from "react"
 import {
   Calendar,
   ChevronLeft,
@@ -34,6 +34,9 @@ export interface DateFilterBarProps {
   /** "single" for day-wise view (e.g. Room Status Board, Ledgers, Dashboard),
    *  "range" for date intervals (e.g. Reservations, Folios, Tickets, Reports) */
   mode?: "single" | "range"
+
+  /** Allow user to toggle between Single Day and From Date - To Date range */
+  allowModeToggle?: boolean
 
   /** Currently selected date in YYYY-MM-DD (single mode) */
   date?: string
@@ -185,11 +188,21 @@ export function formatFriendlyRange(from?: string, to?: string): string {
   if (from && !to) return `From ${formatFriendlyDate(from)}`
   if (!from && to) return `Until ${formatFriendlyDate(to)}`
   if (from === to) return formatFriendlyDate(from)
-  return `${formatFriendlyDate(from)} – ${formatFriendlyDate(to)}`
+  const dFrom = parseDate(from)
+  const dTo = parseDate(to)
+  let spanText = ""
+  if (dFrom && dTo) {
+    const span = Math.round((dTo.getTime() - dFrom.getTime()) / 86400000) + 1
+    if (span > 0) {
+      spanText = ` (${span} day${span === 1 ? "" : "s"})`
+    }
+  }
+  return `${formatFriendlyDate(from)} – ${formatFriendlyDate(to)}${spanText}`
 }
 
 export default function DateFilterBar({
   mode = "range",
+  allowModeToggle,
   date = "",
   onDateChange,
   fromDate = "",
@@ -208,6 +221,14 @@ export default function DateFilterBar({
 }: DateFilterBarProps) {
   const { t } = useT()
   const todayStr = useMemo(() => getToday(), [])
+  const [activeMode, setActiveMode] = useState<"single" | "range">(mode)
+
+  useEffect(() => {
+    setActiveMode(mode)
+  }, [mode])
+
+  // Can toggle mode if explicitly enabled, or if range handlers or both handlers exist
+  const canToggleMode = allowModeToggle ?? (!!onRangeChange && !!onDateChange)
 
   const singlePresets: { key: PresetKey; label: string }[] = useMemo(
     () => [
@@ -247,18 +268,25 @@ export default function DateFilterBar({
   const handlePrevDay = () => {
     const cur = date || todayStr
     const prev = shiftDate(cur, -1)
-    if (prev && onDateChange) onDateChange(prev)
+    if (prev) {
+      if (onDateChange) onDateChange(prev)
+      if (onRangeChange) onRangeChange(prev, prev)
+    }
   }
 
   const handleNextDay = () => {
     const cur = date || todayStr
     const next = shiftDate(cur, 1)
-    if (next && onDateChange) onDateChange(next)
+    if (next) {
+      if (onDateChange) onDateChange(next)
+      if (onRangeChange) onRangeChange(next, next)
+    }
   }
 
   const handleSinglePreset = (preset: PresetKey) => {
     const r = calculateDateRange(preset)
     if (onDateChange) onDateChange(r.from)
+    if (onRangeChange) onRangeChange(r.from, r.to)
   }
 
   // Range navigation (shifts range by its span in days, minimum 1 day)
@@ -274,47 +302,76 @@ export default function DateFilterBar({
     const newFrom = shiftDate(isoDate(f), direction * spanDays)
     const newTo = shiftDate(isoDate(tDate), direction * spanDays)
     onRangeChange(newFrom, newTo)
+    if (onDateChange) onDateChange(newFrom)
   }
 
   const handleRangePreset = (preset: PresetKey) => {
-    if (!onRangeChange) return
     const r = calculateDateRange(preset)
-    onRangeChange(r.from, r.to)
+    if (onRangeChange) onRangeChange(r.from, r.to)
+    if (onDateChange) onDateChange(r.from)
   }
 
   const handleClear = () => {
-    if (mode === "single") {
+    if (activeMode === "single") {
       if (onDateChange) onDateChange(todayStr)
+      if (onRangeChange) onRangeChange(todayStr, todayStr)
     } else {
       if (onRangeChange) onRangeChange("", "")
+      if (onDateChange) onDateChange("")
     }
   }
 
   const inputCls =
-    "min-h-9 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-800 shadow-sm " +
-    "focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
+    "min-h-9 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-800 shadow-xs " +
+    "focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 cursor-pointer"
 
   const btnCls = (active: boolean) =>
     cn(
-      "inline-flex items-center justify-center rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors shadow-sm",
+      "inline-flex items-center justify-center rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors shadow-xs cursor-pointer",
       active
         ? "border-brand-600 bg-brand-50 text-brand-800 font-semibold"
         : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900",
     )
 
-  if (mode === "single") {
+  if (activeMode === "single") {
     const isToday = (date || todayStr) === todayStr
 
     return (
       <div
         className={cn(
-          "flex flex-wrap items-center rounded-xl border border-zinc-200/80 bg-zinc-50/60",
+          "flex flex-wrap items-center rounded-xl border border-zinc-200/80 bg-zinc-50/60 shadow-xs",
           compact ? "gap-1 p-1.5 text-[11px]" : "gap-2 p-2 text-xs",
           className,
         )}
       >
+        {/* Optional Mode Toggle Switch: Single Day vs From - To Date */}
+        {canToggleMode && (
+          <div className="flex items-center rounded-lg border border-zinc-200 bg-zinc-100/90 p-0.5 text-xs font-medium mr-1 select-none">
+            <button
+              type="button"
+              onClick={() => setActiveMode("single")}
+              className="rounded-md px-2 py-0.5 text-xs transition-colors cursor-pointer bg-white text-zinc-900 shadow-xs font-semibold"
+            >
+              {t("Day")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMode("range")
+                if (onRangeChange && !fromDate) {
+                  const initial = date || todayStr
+                  onRangeChange(initial, initial)
+                }
+              }}
+              className="rounded-md px-2 py-0.5 text-xs transition-colors cursor-pointer text-zinc-600 hover:text-zinc-900"
+            >
+              {t("From - To")}
+            </button>
+          </div>
+        )}
+
         {label && (
-          <div className="flex items-center gap-1 font-semibold text-zinc-700 mr-1">
+          <div className="flex items-center gap-1 font-semibold text-zinc-700 mr-1 select-none">
             <Calendar className="size-3.5 text-brand-600" />
             <span>{t(label)}</span>
           </div>
@@ -340,7 +397,7 @@ export default function DateFilterBar({
           </div>
         )}
 
-        {/* Date Stepper and Picker */}
+        {/* Date Stepper and Picker with explicit Date label */}
         <div className="flex items-center gap-1">
           {showNavigation && (
             <button
@@ -348,19 +405,28 @@ export default function DateFilterBar({
               onClick={handlePrevDay}
               title={t("Previous day")}
               aria-label={t("Previous day")}
-              className="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-100"
+              className="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-xs hover:bg-zinc-100 transition-colors cursor-pointer"
             >
               <ChevronLeft className="size-4" />
             </button>
           )}
 
-          <input
-            type="date"
-            aria-label={t("Select date")}
-            className={inputCls}
-            value={date || todayStr}
-            onChange={(e) => onDateChange && onDateChange(e.target.value)}
-          />
+          <div className="flex items-center rounded-lg border border-zinc-200 bg-white shadow-xs focus-within:border-brand-600 focus-within:ring-1 focus-within:ring-brand-600">
+            <span className="rounded-l-lg border-r border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-600 select-none">
+              {t("Date")}
+            </span>
+            <input
+              type="date"
+              aria-label={t("Select date")}
+              className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
+              value={date || todayStr}
+              onChange={(e) => {
+                const d = e.target.value
+                if (onDateChange) onDateChange(d)
+                if (onRangeChange) onRangeChange(d, d)
+              }}
+            />
+          </div>
 
           {showNavigation && (
             <button
@@ -368,7 +434,7 @@ export default function DateFilterBar({
               onClick={handleNextDay}
               title={t("Next day")}
               aria-label={t("Next day")}
-              className="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-100"
+              className="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-xs hover:bg-zinc-100 transition-colors cursor-pointer"
             >
               <ChevronRight className="size-4" />
             </button>
@@ -376,7 +442,7 @@ export default function DateFilterBar({
         </div>
 
         {/* Display friendly date string */}
-        <span className="font-medium text-zinc-600 ml-1">
+        <span className="font-medium text-zinc-600 ml-1 select-none">
           {formatFriendlyDate(date || todayStr)}
         </span>
 
@@ -385,7 +451,7 @@ export default function DateFilterBar({
           <button
             type="button"
             onClick={handleClear}
-            className="ml-auto inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-700"
+            className="ml-auto inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-700 cursor-pointer"
             title={t("Reset to Today")}
           >
             <RotateCcw className="size-3" />
@@ -396,7 +462,7 @@ export default function DateFilterBar({
     )
   }
 
-  // Range Mode
+  // Range Mode ("From Date - To Date")
   const rangePresets = customPresets
     ? defaultRangePresets.filter((p) => customPresets.includes(p.key))
     : defaultRangePresets
@@ -404,11 +470,42 @@ export default function DateFilterBar({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center rounded-xl border border-zinc-200/80 bg-zinc-50/60",
+        "flex flex-wrap items-center rounded-xl border border-zinc-200/80 bg-zinc-50/60 shadow-xs",
         compact ? "gap-1 p-1.5 text-[11px]" : "gap-2 p-2 text-xs",
         className,
       )}
     >
+      {/* Optional Mode Toggle Switch: Single Day vs From - To Date */}
+      {canToggleMode && (
+        <div className="flex items-center rounded-lg border border-zinc-200 bg-zinc-100/90 p-0.5 text-xs font-medium mr-1 select-none">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMode("single")
+              if (onDateChange) onDateChange(fromDate || date || todayStr)
+            }}
+            className="rounded-md px-2 py-0.5 text-xs transition-colors cursor-pointer text-zinc-600 hover:text-zinc-900"
+          >
+            {t("Day")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveMode("range")}
+            className="rounded-md px-2 py-0.5 text-xs transition-colors cursor-pointer bg-white text-zinc-900 shadow-xs font-semibold"
+          >
+            {t("From - To")}
+          </button>
+        </div>
+      )}
+
+      {/* Optional Section / Filter Label */}
+      {label && (
+        <div className="flex items-center gap-1 font-semibold text-zinc-700 mr-1 select-none">
+          <Calendar className="size-3.5 text-brand-600" />
+          <span>{t(label)}</span>
+        </div>
+      )}
+
       {/* Optional Field Selector */}
       {fieldOptions && fieldOptions.length > 0 && onFieldChange && (
         <div className="flex items-center gap-1 mr-1">
@@ -447,38 +544,61 @@ export default function DateFilterBar({
         </div>
       )}
 
-      {/* Range inputs with stepper */}
-      <div className="flex items-center gap-1">
+      {/* Range inputs with stepper and prominent From Date - To Date labels */}
+      <div className="flex flex-wrap items-center gap-1.5">
         {showNavigation && (fromDate || toDate) && (
           <button
             type="button"
             onClick={() => handleShiftRange(-1)}
             title={t("Previous period")}
             aria-label={t("Previous period")}
-            className="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-100"
+            className="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-xs hover:bg-zinc-100 transition-colors cursor-pointer"
           >
             <ChevronLeft className="size-4" />
           </button>
         )}
 
-        <input
-          type="date"
-          aria-label={t("From date")}
-          className={inputCls}
-          value={fromDate}
-          placeholder={t("From")}
-          onChange={(e) => onRangeChange && onRangeChange(e.target.value, toDate)}
-        />
-        <span className="text-zinc-400">→</span>
-        <input
-          type="date"
-          aria-label={t("To date")}
-          className={inputCls}
-          value={toDate}
-          min={fromDate || undefined}
-          placeholder={t("To")}
-          onChange={(e) => onRangeChange && onRangeChange(fromDate, e.target.value)}
-        />
+        {/* From Date with explicit visible label badge */}
+        <div className="flex items-center rounded-lg border border-zinc-200 bg-white shadow-xs focus-within:border-brand-600 focus-within:ring-1 focus-within:ring-brand-600">
+          <span className="rounded-l-lg border-r border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-600 select-none">
+            {t("From Date")}
+          </span>
+          <input
+            type="date"
+            aria-label={t("From Date")}
+            className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
+            value={fromDate}
+            onChange={(e) => {
+              const newFrom = e.target.value
+              let newTo = toDate
+              if (newFrom && toDate && newFrom > toDate) {
+                newTo = newFrom
+              }
+              if (onRangeChange) onRangeChange(newFrom, newTo)
+              if (onDateChange) onDateChange(newFrom)
+            }}
+          />
+        </div>
+
+        <span className="text-xs font-semibold text-zinc-400 select-none">→</span>
+
+        {/* To Date with explicit visible label badge */}
+        <div className="flex items-center rounded-lg border border-zinc-200 bg-white shadow-xs focus-within:border-brand-600 focus-within:ring-1 focus-within:ring-brand-600">
+          <span className="rounded-l-lg border-r border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-600 select-none">
+            {t("To Date")}
+          </span>
+          <input
+            type="date"
+            aria-label={t("To Date")}
+            className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
+            value={toDate}
+            min={fromDate || undefined}
+            onChange={(e) => {
+              const newTo = e.target.value
+              if (onRangeChange) onRangeChange(fromDate, newTo)
+            }}
+          />
+        </div>
 
         {showNavigation && (fromDate || toDate) && (
           <button
@@ -486,19 +606,27 @@ export default function DateFilterBar({
             onClick={() => handleShiftRange(1)}
             title={t("Next period")}
             aria-label={t("Next period")}
-            className="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm hover:bg-zinc-100"
+            className="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-xs hover:bg-zinc-100 transition-colors cursor-pointer"
           >
             <ChevronRight className="size-4" />
           </button>
         )}
       </div>
 
+      {/* Friendly range label with days count */}
+      {(fromDate || toDate) && (
+        <span className="font-medium text-zinc-500 text-xs ml-1 select-none">
+          {formatFriendlyRange(fromDate, toDate)}
+        </span>
+      )}
+
       {/* Clear button */}
       {showClear && (fromDate || toDate) && (
         <button
           type="button"
           onClick={handleClear}
-          className="ml-auto inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-700"
+          className="ml-auto inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-700 cursor-pointer"
+          title={t("Clear date filter")}
         >
           <X className="size-3" />
           {t("Clear")}

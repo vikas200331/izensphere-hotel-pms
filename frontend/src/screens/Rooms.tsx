@@ -7,9 +7,6 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useOutletContext, useSearchParams } from "react-router-dom"
 import {
   BedDouble,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
   Lock,
   LogIn,
   LogOut,
@@ -27,6 +24,7 @@ import RoomInsights from "../components/RoomInsights"
 import CheckOutDialog from "../components/CheckOutDialog"
 import CheckInDialog from "../components/CheckInDialog"
 import RoomChangeDialog from "../components/RoomChangeDialog"
+import DateFilterBar from "../components/DateFilterBar"
 
 const NO_FLOOR = "__none__"
 
@@ -35,21 +33,6 @@ function formatYMD(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0")
   const day = String(d.getDate()).padStart(2, "0")
   return `${y}-${m}-${day}`
-}
-
-function parseYMD(s: string): Date {
-  const [y, m, d] = s.split("-").map(Number)
-  return new Date(y, m - 1, d)
-}
-
-function addDaysToYMD(ymd: string, days: number): string {
-  try {
-    const d = parseYMD(ymd)
-    d.setDate(d.getDate() + days)
-    return formatYMD(d)
-  } catch {
-    return ymd
-  }
 }
 
 type StatusFilter =
@@ -168,45 +151,12 @@ export default function Rooms() {
   const todayStr = board?.today || formatYMD(new Date())
   const currentDate = selectedDate || board?.date || todayStr
   const isToday = currentDate === todayStr
-  const yesterdayStr = addDaysToYMD(todayStr, -1)
-  const tomorrowStr = addDaysToYMD(todayStr, 1)
 
   const handleSelectDate = (newDate: string) => {
     setSelectedDate(newDate)
     setParam("date", newDate === todayStr ? null : newDate)
     load(newDate)
   }
-
-  const handlePrevDay = () => {
-    const prev = addDaysToYMD(currentDate, -1)
-    handleSelectDate(prev)
-  }
-
-  const handleNextDay = () => {
-    const next = addDaysToYMD(currentDate, 1)
-    handleSelectDate(next)
-  }
-
-  const formattedDate = useMemo(() => {
-    try {
-      const d = parseYMD(currentDate)
-      return d.toLocaleDateString(undefined, {
-        weekday: "short",
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-    } catch {
-      return currentDate
-    }
-  }, [currentDate])
-
-  const relativeBadge = useMemo(() => {
-    if (currentDate === todayStr) return t("Today")
-    if (currentDate === yesterdayStr) return t("Yesterday")
-    if (currentDate === tomorrowStr) return t("Tomorrow")
-    return null
-  }, [currentDate, todayStr, yesterdayStr, tomorrowStr, t])
 
   const rooms = board?.rooms ?? []
   const floorOf = (r: BoardRoom) => (r.floor || "").trim() || NO_FLOOR
@@ -319,91 +269,24 @@ export default function Rooms() {
         <RoomInsights onOpenRoom={(r) => setParam("room", r)} />
       ) : (
         <>
-          {/* Day-wise Date Filter Control */}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
-                <button
-                  type="button"
-                  onClick={handlePrevDay}
-                  aria-label={t("Previous day")}
-                  title={t("Previous day")}
-                  className="flex size-9 cursor-pointer items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-white hover:text-zinc-900"
-                >
-                  <ChevronLeft className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNextDay}
-                  aria-label={t("Next day")}
-                  title={t("Next day")}
-                  className="flex size-9 cursor-pointer items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-white hover:text-zinc-900"
-                >
-                  <ChevronRight className="size-4" />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2 px-1">
-                <Calendar className="size-4 text-brand-600" aria-hidden />
-                <span className="text-sm font-semibold text-zinc-900">{formattedDate}</span>
-                {relativeBadge && (
-                  <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
-                    {relativeBadge}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => handleSelectDate(yesterdayStr)}
-                  className={cn(
-                    "cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                    currentDate === yesterdayStr
-                      ? "bg-brand-600 text-white shadow-xs"
-                      : "text-zinc-600 hover:text-zinc-900",
-                  )}
-                >
-                  {t("Yesterday")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectDate(todayStr)}
-                  className={cn(
-                    "cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                    currentDate === todayStr
-                      ? "bg-brand-600 text-white shadow-xs"
-                      : "text-zinc-600 hover:text-zinc-900",
-                  )}
-                >
-                  {t("Today")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectDate(tomorrowStr)}
-                  className={cn(
-                    "cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                    currentDate === tomorrowStr
-                      ? "bg-brand-600 text-white shadow-xs"
-                      : "text-zinc-600 hover:text-zinc-900",
-                  )}
-                >
-                  {t("Tomorrow")}
-                </button>
-              </div>
-
-              <label className="relative flex items-center">
-                <input
-                  type="date"
-                  value={currentDate}
-                  onChange={(e) => e.target.value && handleSelectDate(e.target.value)}
-                  aria-label={t("Select date")}
-                  className="h-9 cursor-pointer rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 hover:border-zinc-400 focus:border-brand-500 focus:outline-hidden"
-                />
-              </label>
-            </div>
+          {/* Unified Date Filter Control with Single Day and From Date - To Date support */}
+          <div className="mb-4">
+            <DateFilterBar
+              mode="single"
+              allowModeToggle
+              date={currentDate}
+              onDateChange={handleSelectDate}
+              fromDate={params.get("from_date") || currentDate}
+              toDate={params.get("to_date") || currentDate}
+              onRangeChange={(from, to) => {
+                if (from) {
+                  handleSelectDate(from)
+                  setParam("from_date", from)
+                  setParam("to_date", to)
+                }
+              }}
+              label="Room Status Date"
+            />
           </div>
 
           <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
