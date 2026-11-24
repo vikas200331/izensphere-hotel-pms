@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import PrivacyNotice, { setPrivacyTerms } from "../components/PrivacyNotice"
-import { CalendarDays, Check, Clock } from "lucide-react"
-import { useParams } from "react-router-dom"
+import { CalendarDays, Check, Clock, Home } from "lucide-react"
+import { Link, useParams } from "react-router-dom"
 import { call } from "../lib/api"
 import { Button } from "../components/ui/button"
 import { SignaturePad } from "../components/SignaturePad"
@@ -219,7 +219,25 @@ export default function PublicCheckin() {
   if (error && !info)
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
-        <p className="text-zinc-500">{translate(error)}</p>
+        <div className="max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+          <p className="text-sm text-zinc-600">{translate(error)}</p>
+          <div className="mt-5 flex justify-center gap-2">
+            <Link
+              to="/book"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+            >
+              <Home className="size-3.5" />
+              {t("Back to Home")}
+            </Link>
+            <Link
+              to="/stay"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
+            >
+              <CalendarDays className="size-3.5" />
+              {t("My Bookings")}
+            </Link>
+          </div>
+        </div>
       </div>
     )
   if (!info)
@@ -230,6 +248,24 @@ export default function PublicCheckin() {
   return (
     <div className="min-h-screen bg-zinc-50 px-4 py-8">
       <div className="mx-auto max-w-lg">
+        {/* Top Navigation Bar */}
+        <div className="mb-4 flex items-center justify-between">
+          <Link
+            to="/book"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-white hover:text-zinc-900 hover:shadow-sm transition"
+          >
+            <Home className="size-3.5 text-zinc-500" />
+            <span>{t("Back to Home")}</span>
+          </Link>
+          <Link
+            to={stay?.reservation ? `/stay?ref=${encodeURIComponent(stay.reservation)}` : "/stay"}
+            className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50 hover:text-zinc-900 transition"
+          >
+            <CalendarDays className="size-3.5 text-brand-600" />
+            <span>{t("My Bookings")}</span>
+          </Link>
+        </div>
+
         <div className="mb-6 flex items-center gap-3">
           <div className="flex size-12 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
             {p.logo_url ? (
@@ -269,14 +305,30 @@ export default function PublicCheckin() {
         {token && <GuestLaundryCard token={token} />}
 
         {done ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-800">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-800 shadow-sm">
             <p className="flex items-center gap-2 text-lg font-semibold">
               <Check className="size-5" aria-hidden />
               {t("You're checked in online")}
             </p>
-            <p className="mt-1 text-sm">
+            <p className="mt-1 text-sm text-emerald-700">
               {t("Skip the paperwork at the desk - just show your ID on arrival and pick up the key. See you soon!")}
             </p>
+            <div className="mt-5 flex flex-wrap items-center gap-2.5 border-t border-emerald-200/80 pt-4">
+              <Link
+                to={stay?.reservation ? `/stay?ref=${encodeURIComponent(stay.reservation)}` : "/stay"}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-800 transition"
+              >
+                <CalendarDays className="size-3.5" />
+                {t("View My Booking")}
+              </Link>
+              <Link
+                to="/book"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100/60 transition"
+              >
+                <Home className="size-3.5" />
+                {t("Back to Home")}
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">

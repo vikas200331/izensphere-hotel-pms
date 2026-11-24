@@ -13,6 +13,7 @@ import {
   Clock,
   ExternalLink,
   Eye,
+  Home,
   Images,
   MapPin,
   Phone,
@@ -1817,9 +1818,23 @@ export default function PublicBooking() {
           }}
           footer={
             done ? (
-              <Button className="w-full justify-center py-2.5" onClick={() => { setBooking(null); setDone(null); setSelected(null); fetchResults() }}>
-                {t("Done")}
-              </Button>
+              <div className="flex w-full gap-2.5">
+                <Link
+                  to={`/stay?ref=${encodeURIComponent(done.reservation)}`}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+                >
+                  <CalendarDays className="size-4" />
+                  {t("My Bookings")}
+                </Link>
+                <Button
+                  variant="outline"
+                  className="flex-1 justify-center py-2.5 text-sm font-semibold"
+                  onClick={() => { setBooking(null); setDone(null); setSelected(null); fetchResults() }}
+                >
+                  <Home className="size-4 mr-1.5" />
+                  {t("Back to Home")}
+                </Button>
+              </div>
             ) : (
               <div className="w-full space-y-2">
                 <PrivacyNotice propertyName={p.property_name} contact={p.privacy_contact}
@@ -1873,12 +1888,23 @@ export default function PublicBooking() {
                 <p className="mt-0.5 text-xs text-zinc-600 leading-relaxed">
                   {t("You can track your stay, complete online check-in, and view billing details anytime using your booking number.")}
                 </p>
-                <Link
-                  to={`/stay?ref=${encodeURIComponent(done.reservation)}`}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
-                >
-                  {t("Open Stay Portal")}
-                </Link>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    to={`/stay?ref=${encodeURIComponent(done.reservation)}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+                  >
+                    <CalendarDays className="size-3.5" />
+                    {t("View My Booking")}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => { setBooking(null); setDone(null); setSelected(null); fetchResults() }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
+                  >
+                    <Home className="size-3.5" />
+                    {t("Back to Home")}
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
