@@ -442,10 +442,11 @@ export interface PropertyRow {
 export const myProperties = () =>
   call<PropertyRow[]>("izensphere_stay_and_dine.api.my_properties")
 
-export const getSnapshot = (date?: string) =>
+export const getSnapshot = (date?: string, toDate?: string) =>
   call<Snapshot>("izensphere_stay_and_dine.api.front_desk_snapshot", {
     property: getCurrentProperty(),
     ...(date ? { date } : {}),
+    ...(toDate ? { to_date: toDate } : {}),
   })
 
 export const getCalendar = (days = 14, startDate?: string) =>

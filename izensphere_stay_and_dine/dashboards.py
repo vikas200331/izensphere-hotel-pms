@@ -44,10 +44,10 @@ def _housekeeping_slice(property: str):
 	}
 
 
-def _finance_slice(property: str, date: str):
+def _finance_slice(property: str, date: str, from_date: str | None = None):
 	"""Collections today (by mode), and money still owed on open folios."""
 	from izensphere_stay_and_dine.api import cash_summary
-	collections = cash_summary(property, date)
+	collections = cash_summary(property, from_date or date, date)
 	outstanding, open_folios = _open_folio_totals(property)
 	return {
 		"collections_today": collections.get("grand_total", 0),
@@ -187,21 +187,28 @@ def _open_folio_totals(property: str) -> tuple[float, int]:
 @frappe.whitelist()
 @require_roles("Front Desk", "Finance", "Revenue Manager", "Night Auditor", "Hotel Admin",
                "Kamra Agent")
-def property_dashboard(property: str, date: str | None = None, with_comparison: int = 0):
+def property_dashboard(property: str, date: str | None = None,
+                       from_date: str | None = None, to_date: str | None = None,
+                       with_comparison: int = 0):
 	"""Everything one hotel's dashboard needs, by department. The year on
-	year comparison is heavy, so only the Dashboard screen asks for it."""
+	year comparison is heavy, so only the Dashboard screen asks for it.
+	Supports both single date and from_date..to_date ranges."""
 	from izensphere_stay_and_dine.crs import assert_property_access
 	assert_property_access(property)
-	date = date or nowdate()
+	end_date = to_date or date or nowdate()
+	start_date = from_date or (date if not to_date else end_date)
+	date = end_date
 	hk = _housekeeping_slice(property)
 	forecast = occupancy_forecast(property, date)
 	if not sees_figures():
 		from izensphere_stay_and_dine.reports import movement_counts
-		move = movement_counts(property, date, date)
+		move = movement_counts(property, start_date, end_date)
 		return {
 			"property": property,
 			"property_name": frappe.db.get_value("Property", property, "property_name"),
 			"date": date,
+			"from_date": start_date,
+			"to_date": end_date,
 			"figures_hidden": True,
 			**move,
 			"front_desk": move,
@@ -210,16 +217,18 @@ def property_dashboard(property: str, date: str | None = None, with_comparison: 
 			"forecast": forecast,
 		}
 	from izensphere_stay_and_dine.reports import manager_flash
-	flash = manager_flash(property, date)
+	flash = manager_flash(property, date=end_date, from_date=start_date)
 	today = flash.get("today") or {}
 	mtd = flash.get("mtd") or {}
 	move = flash.get("movement") or {}
-	finance = _finance_slice(property, date)
+	finance = _finance_slice(property, end_date, from_date=start_date)
 
 	return {
 		"property": property,
 		"property_name": frappe.db.get_value("Property", property, "property_name"),
 		"date": date,
+		"from_date": start_date,
+		"to_date": end_date,
 		"total_rooms": flash.get("total_rooms", 0),
 		# headline metrics
 		"occupancy_pct": today.get("occupancy_pct", 0),

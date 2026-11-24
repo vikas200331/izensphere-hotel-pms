@@ -703,7 +703,7 @@ def _fetch_reservations(property: str, from_date: str, to_date: str,
 def _fetch_arrivals(property: str, from_date: str, to_date: str, **_) -> list[dict]:
 	return _fetch_reservations(
 		property, from_date, to_date, "check_in_date",
-		["Confirmed", "Checked In"])
+		["Confirmed", "Checked In", "Checked Out"])
 
 
 def _fetch_departures(property: str, from_date: str, to_date: str, **_) -> list[dict]:
@@ -713,19 +713,33 @@ def _fetch_departures(property: str, from_date: str, to_date: str, **_) -> list[
 
 
 def _fetch_in_house(property: str, from_date: str, to_date: str, **_) -> list[dict]:
-	# as-of to_date: checked in on or before, checking out after
+	# Overnight stay overlap condition: check_in < to_date AND check_out > from_date
+	# Checkout date is not counted as an occupied night.
 	fields = [
 		"name", "guest_name", "room_type", "room", "status", "source",
 		"check_in_date", "check_out_date", "nights", "adults", "children",
 		"company",
 	]
+	if from_date == to_date:
+		return frappe.get_all(
+			"Reservation",
+			filters={
+				"property": property,
+				"status": ["in", ["Checked In", "Checked Out"]],
+				"check_in_date": ["<=", to_date],
+				"check_out_date": [">", to_date],
+			},
+			fields=fields,
+			order_by="room asc",
+			limit_page_length=MAX_ROWS,
+		)
 	return frappe.get_all(
 		"Reservation",
 		filters={
 			"property": property,
-			"status": "Checked In",
-			"check_in_date": ["<=", to_date],
-			"check_out_date": [">", to_date],
+			"status": ["in", ["Checked In", "Checked Out"]],
+			"check_in_date": ["<", to_date],
+			"check_out_date": [">", from_date],
 		},
 		fields=fields,
 		order_by="room asc",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { call, getCurrentProperty } from "../lib/api"
 import { serverError } from "../lib/resource"
 import { Button } from "../components/ui/button"
@@ -25,14 +25,31 @@ type FolioRow = {
 
 export default function FolioHistory() {
   useUILanguage()
-  const [q, setQ] = useState("")
-  const [status, setStatus] = useState("")
-  const [fromDate, setFromDate] = useState("") // closed on, "" = any day
-  const [toDate, setToDate] = useState("")
+  const [params, setParams] = useSearchParams()
+  const [q, setQ] = useState(() => params.get("q") || "")
+  const [status, setStatus] = useState(() => params.get("status") || "")
+  const [fromDate, setFromDate] = useState(() => params.get("from_date") || "")
+  const [toDate, setToDate] = useState(() => params.get("to_date") || "")
   const [rows, setRows] = useState<FolioRow[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const handleRangeChange = (from: string, to: string) => {
+    setFromDate(from)
+    setToDate(to)
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        if (from) next.set("from_date", from)
+        else next.delete("from_date")
+        if (to) next.set("to_date", to)
+        else next.delete("to_date")
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const load = useCallback(async () => {
     try {
@@ -43,7 +60,7 @@ export default function FolioHistory() {
           query: q || undefined,
           status: status || undefined,
           from_date: fromDate || undefined,
-          to_date: (fromDate && toDate) || undefined,
+          to_date: toDate || undefined,
         },
       )
       setRows(out.folios)
@@ -103,11 +120,8 @@ export default function FolioHistory() {
             mode="range"
             fromDate={fromDate}
             toDate={toDate}
-            onRangeChange={(from, to) => {
-              setFromDate(from)
-              setToDate(to)
-            }}
-            label={translate("Closed on")}
+            onRangeChange={handleRangeChange}
+            label={translate("Date")}
             compact
           />
           <Button

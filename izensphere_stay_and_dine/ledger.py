@@ -417,25 +417,36 @@ def folio_reconciliation(property: str, limit: int = 20) -> dict:
 
 @frappe.whitelist()
 @require_roles("Finance", "Front Desk", "Hotel Admin", "Night Auditor", "Kamra Agent")
-def journal_by_transaction_code(property: str, business_date: str | None = None):
-	date = business_date or get_business_date(property)
+def journal_by_transaction_code(property: str, business_date: str | None = None,
+                                from_date: str | None = None, to_date: str | None = None):
+	if from_date or to_date:
+		f = from_date or to_date
+		t = to_date or from_date
+		date_cond = "business_date BETWEEN %(f)s AND %(t)s"
+		params = {"property": property, "f": f, "t": t}
+		ret_date = f"{f}..{t}" if f != t else f
+	else:
+		date = business_date or get_business_date(property)
+		date_cond = "business_date = %(date)s"
+		params = {"property": property, "date": date}
+		ret_date = date
 	rows = frappe.db.sql(
-		"""
+		f"""
 		SELECT COALESCE(transaction_code, '—') AS transaction_code,
 		       COALESCE(SUM(debit), 0) AS debit,
 		       COALESCE(SUM(credit), 0) AS credit,
 		       COUNT(*) AS entries
 		FROM `tabFolio Ledger Entry`
-		WHERE property = %(property)s AND business_date = %(date)s
+		WHERE property = %(property)s AND {date_cond}
 		GROUP BY transaction_code
 		ORDER BY transaction_code
 		""",
-		{"property": property, "date": date}, as_dict=True,
+		params, as_dict=True,
 	)
 	for r in rows:
 		r["description"] = frappe.db.get_value(
 			"Transaction Code", r.transaction_code, "description") or ""
-	return {"business_date": date, "rows": rows}
+	return {"business_date": ret_date, "rows": rows}
 
 
 @frappe.whitelist()
@@ -1303,11 +1314,16 @@ def folio_history(property: str, query: str | None = None,
 	                 ["folio_type", "!=", "Account"]]
 	if status:
 		filters.append(["status", "=", status])
-	if from_date:  # by the day the bill was closed
+	if from_date or to_date:
 		from izensphere_stay_and_dine.business_date import report_range_end
-
-		to = report_range_end(from_date, to_date)
-		filters.append(["closed_on", "between", [from_date, f"{to} 23:59:59"]])
+		from_d = from_date or to_date
+		to_d = report_range_end(from_d, to_date or from_date)
+		if status == "Closed":
+			filters.append(["closed_on", "between", [f"{from_d} 00:00:00", f"{to_d} 23:59:59"]])
+		elif status == "Open":
+			filters.append(["opened_on", "between", [f"{from_d} 00:00:00", f"{to_d} 23:59:59"]])
+		else:
+			filters.append(["modified", "between", [f"{from_d} 00:00:00", f"{to_d} 23:59:59"]])
 	rows = frappe.get_all(
 		"Folio",
 		filters=filters,

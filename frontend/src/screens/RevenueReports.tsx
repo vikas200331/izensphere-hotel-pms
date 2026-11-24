@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { ChevronLeft, ChevronRight, Target } from "lucide-react"
 
 import { call, getCurrentProperty } from "../lib/api"
@@ -241,12 +242,43 @@ const BY_OPTIONS: { key: string; label: string }[] = [
 function Contribution() {
   useUILanguage()
   const property = getCurrentProperty()
+  const [params, setParams] = useSearchParams()
   const today = new Date().toISOString().slice(0, 10)
   const monthAgo = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)
-  const [from, setFrom] = useState(monthAgo)
-  const [to, setTo] = useState(today)
-  const [by, setBy] = useState("source")
+  const fromParam = params.get("from_date") || params.get("from") || ""
+  const toParam = params.get("to_date") || params.get("to") || ""
+  const byParam = params.get("by") || "source"
+
+  const [from, setFrom] = useState(fromParam || monthAgo)
+  const [to, setTo] = useState(toParam || today)
+  const [by, setBy] = useState(byParam)
   const [data, setData] = useState<Contrib | null>(null)
+
+  const handleRangeChange = (f: string, t: string) => {
+    setFrom(f)
+    setTo(t)
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("from_date", f)
+        next.set("to_date", t)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  const handleByChange = (newBy: string) => {
+    setBy(newBy)
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("by", newBy)
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const load = useCallback(() => {
     call<Contrib>("izensphere_stay_and_dine.reports.contribution", {
@@ -270,16 +302,13 @@ function Contribution() {
             mode="range"
             fromDate={from}
             toDate={to}
-            onRangeChange={(f, t) => {
-              setFrom(f)
-              setTo(t)
-            }}
+            onRangeChange={handleRangeChange}
             compact
           />
           <select
             className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm"
             value={by}
-            onChange={(e) => setBy(e.target.value)}
+            onChange={(e) => handleByChange(e.target.value)}
             aria-label={translate("Group by")}
           >
             {BY_OPTIONS.map((o) => (

@@ -10,7 +10,6 @@ import CheckInDialog from "../components/CheckInDialog"
 import CheckOutDialog from "../components/CheckOutDialog"
 import type { ShellContext } from "../AppShell"
 import { cn } from "../lib/utils"
-import { shiftDate } from "../lib/stay"
 import { cur, moneyLocale } from "../lib/money"
 import { serverError } from "../lib/resource"
 import { useT, t as translate, uiDateLocale } from "../lib/i18n"
@@ -30,8 +29,6 @@ const iso = (d: Date) => {
   const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
   return z.toISOString().slice(0, 10)
 }
-// "" for a bad ?date= in the URL rather than an Invalid Date crash
-const shift = shiftDate
 const money = (n: number) =>
   `${cur()}${Number(n || 0).toLocaleString(moneyLocale(), { maximumFractionDigits: 0 })}`
 const short = (d: string) =>
@@ -57,36 +54,21 @@ export default function InHouse() {
   const tab = (TABS.some((x) => x.id === params.get("tab")) ? params.get("tab") : "arrivals") as Tab
   const today = iso(new Date())
   const date = params.get("date") || today
-  // expected arrivals over a range: date..until (one day when not set)
-  const until = tab === "arrivals" && (params.get("until") ?? "") > date ? params.get("until")! : ""
+  const until = (params.get("until") || params.get("to_date")) ?? ""
   const [snap, setSnap] = useState<Snapshot | null>(null)
-  const [rangeArrivals, setRangeArrivals] = useState<ReservationRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [checkingIn, setCheckingIn] = useState<string | null>(null)
   const [checkingOut, setCheckingOut] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    getSnapshot(date === today ? undefined : date)
+    getSnapshot(date === today && !until ? undefined : date, until || undefined)
       .then((s) => {
         setSnap(s)
         setError(null)
       })
       .catch((e) => setError(serverError(e)))
-  }, [date, today])
+  }, [date, until, today])
   useEffect(load, [load, refreshKey])
-
-  // ponytail: one snapshot per day, capped at 14 days; add a range endpoint
-  // if desks want longer lists
-  useEffect(() => {
-    if (!until) { setRangeArrivals(null); return }
-    const days: string[] = []
-    for (let d = shift(date, 1); d && d <= until && days.length < 13; d = shift(d, 1)) days.push(d)
-    let live = true
-    Promise.all(days.map((d) => getSnapshot(d)))
-      .then((snaps) => { if (live) setRangeArrivals(snaps.flatMap((s) => s.arrivals ?? [])) })
-      .catch((e) => setError(serverError(e)))
-    return () => { live = false }
-  }, [date, until, refreshKey])
 
   const setQuery = (next: { tab?: Tab; date?: string; until?: string }) => {
     const p = new URLSearchParams(params)
@@ -96,14 +78,14 @@ export default function InHouse() {
       else p.delete("until")
     }
     if (next.date !== undefined) {
-      if (next.date === today) p.delete("date")
+      if (next.date === today && !next.until) p.delete("date")
       else p.set("date", next.date)
     }
     setParams(p, { replace: true })
   }
 
   const rows: Record<Tab, ReservationRow[]> = {
-    arrivals: [...(snap?.arrivals ?? []), ...(rangeArrivals ?? [])],
+    arrivals: snap?.arrivals ?? [],
     "in-house": snap?.in_house ?? [],
     departures: snap?.departures ?? [],
   }
@@ -128,7 +110,7 @@ export default function InHouse() {
         </div>
         <div>
           <DateFilterBar
-            mode={tab === "arrivals" || until ? "range" : "single"}
+            mode={until && until !== date ? "range" : "single"}
             allowModeToggle
             date={date}
             onDateChange={(d) => setQuery({ date: d, until: "" })}

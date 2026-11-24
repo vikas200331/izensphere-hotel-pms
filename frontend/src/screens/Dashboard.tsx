@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react"
-import { Link } from "react-router-dom"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Link, useSearchParams } from "react-router-dom"
 import { useRealtime } from "../lib/realtime"
 import {
   BedDouble, LogIn, Users, Banknote, Wallet, Building2, Brush, Receipt,
@@ -20,6 +20,8 @@ const inr = (n: unknown) =>
 interface PropDash {
   property_name: string
   date: string
+  from_date?: string
+  to_date?: string
   total_rooms: number
   occupancy_pct: number
   arrivals: number
@@ -113,8 +115,19 @@ function Tile({ icon: Icon, label, value, sub, tone }: {
 
 export default function Dashboard() {
   const { t } = useT()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const todayStr = useMemo(() => new Date().toLocaleDateString("en-CA"), [])
+  const paramDate = searchParams.get("date") || ""
+  const paramFrom = searchParams.get("from_date") || ""
+  const paramTo = searchParams.get("to_date") || ""
+
+  const initialMode = (paramFrom && paramTo) ? "range" : "single"
+  const [filterMode, setFilterMode] = useState<"single" | "range">(initialMode)
+  const [date, setDate] = useState<string>(paramDate || paramTo || todayStr)
+  const [fromDate, setFromDate] = useState<string>(paramFrom || paramDate || todayStr)
+  const [toDate, setToDate] = useState<string>(paramTo || paramDate || todayStr)
+
   const [scope, setScope] = useState<"property" | "portfolio">("property")
-  const [date, setDate] = useState(() => new Date().toLocaleDateString("en-CA"))
   const [multi, setMulti] = useState(false)
   const [prop, setProp] = useState<PropDash | null>(null)
   const [port, setPort] = useState<Portfolio | null>(null)
@@ -126,12 +139,49 @@ export default function Dashboard() {
       .catch(() => setMulti(false))
   }, [])
 
+  const handleDateChange = useCallback((newDate: string) => {
+    setDate(newDate)
+    setFromDate(newDate)
+    setToDate(newDate)
+    setFilterMode("single")
+    setSearchParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("date", newDate)
+        next.delete("from_date")
+        next.delete("to_date")
+        return next
+      },
+      { replace: true },
+    )
+  }, [setSearchParams])
+
+  const handleRangeChange = useCallback((from: string, to: string) => {
+    setFromDate(from)
+    setToDate(to)
+    setDate(to)
+    setFilterMode("range")
+    setSearchParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("from_date", from)
+        next.set("to_date", to)
+        next.delete("date")
+        return next
+      },
+      { replace: true },
+    )
+  }, [setSearchParams])
+
   const load = useCallback(() => {
     setError(null)
     if (scope === "property") {
+      const isRange = filterMode === "range" || Boolean(fromDate && toDate && fromDate !== toDate)
       call<PropDash & { figures_hidden?: boolean }>("izensphere_stay_and_dine.dashboards.property_dashboard", {
         property: getCurrentProperty(),
-        date,
+        date: toDate || date,
+        from_date: isRange ? fromDate : undefined,
+        to_date: isRange ? toDate : undefined,
         with_comparison: 1,
       }).then((d) => d.figures_hidden
         ? setError(t("The revenue dashboard is for Finance, Revenue and managers."))
@@ -140,7 +190,7 @@ export default function Dashboard() {
       call<Portfolio>("izensphere_stay_and_dine.dashboards.portfolio_dashboard", {})
         .then(setPort).catch((e) => setError(serverError(e)))
     }
-  }, [scope, date, t])
+  }, [scope, filterMode, fromDate, toDate, date, t])
   useEffect(load, [load])
   useRealtime(load)
 
@@ -158,10 +208,13 @@ export default function Dashboard() {
         <div className="flex flex-wrap items-center gap-2">
           {scope === "property" && (
             <DateFilterBar
-              mode="single"
+              mode={filterMode}
               allowModeToggle
               date={date}
-              onDateChange={setDate}
+              onDateChange={handleDateChange}
+              fromDate={fromDate}
+              toDate={toDate}
+              onRangeChange={handleRangeChange}
               label={t("Date")}
               compact
             />

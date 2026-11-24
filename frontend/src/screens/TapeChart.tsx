@@ -479,6 +479,9 @@ export default function TapeChart() {
             allowModeToggle
             date={start}
             onDateChange={setStart}
+            fromDate={start}
+            toDate={shiftDate(start, 14)}
+            onRangeChange={(from) => setStart(from)}
             label={t("Start")}
             compact
           />

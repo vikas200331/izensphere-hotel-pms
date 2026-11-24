@@ -7,7 +7,7 @@ import {
   UtensilsCrossed, Receipt, Users, Gift, Ban, ChefHat, Clock,
   Wallet, TrendingUp,
 } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { call, getCurrentProperty } from "../lib/api"
 import { subscribeRealtime } from "../lib/realtime"
 import { serverError } from "../lib/resource"
@@ -112,22 +112,62 @@ function BucketBars({ title, rows }: { title: string; rows: Bucket[] }) {
 
 export default function PosDashboard() {
   useUILanguage()
+  const [params, setParams] = useSearchParams()
   const [outlets, setOutlets] = useState<Outlet[]>([])
-  const [outlet, setOutlet] = useState("")
-  const [date, setDate] = useState(today())
-  const [toDate, setToDate] = useState("") // "" = the one day
+  const paramOutlet = params.get("outlet") || ""
+  const paramFrom = params.get("from_date") || params.get("date") || ""
+  const paramTo = params.get("to_date") || ""
+
+  const [outlet, setOutlet] = useState(paramOutlet)
+  const [date, setDate] = useState(paramFrom || today())
+  const [toDate, setToDate] = useState(paramTo || paramFrom || today())
   const [data, setData] = useState<Dash | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     call<Outlet[]>("izensphere_stay_and_dine.pos.outlets", { property: getCurrentProperty() })
-      .then((o) => { setOutlets(o); if (o[0]) setOutlet(o[0].name) })
+      .then((o) => {
+        setOutlets(o)
+        if (!paramOutlet && o[0]) {
+          setOutlet(o[0].name)
+        }
+      })
       .catch((e) => setError(serverError(e)))
-  }, [])
+  }, [paramOutlet])
+
+  const handleRangeChange = (from: string, to: string) => {
+    setDate(from)
+    setToDate(to)
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("from_date", from)
+        next.set("to_date", to)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  const handleOutletChange = (newOutlet: string) => {
+    setOutlet(newOutlet)
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("outlet", newOutlet)
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const load = useCallback(() => {
     if (!outlet) return
-    call<Dash>("izensphere_stay_and_dine.pos.outlet_dashboard", { outlet, date, to_date: toDate || undefined })
+    call<Dash>("izensphere_stay_and_dine.pos.outlet_dashboard", {
+      outlet,
+      date,
+      to_date: toDate || undefined,
+    })
       .then((d) => { setData(d); setError(null) })
       .catch((e) => setError(serverError(e)))
   }, [outlet, date, toDate])
@@ -148,7 +188,7 @@ export default function PosDashboard() {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-xl font-bold text-zinc-800">
-          <TrendingUp className="size-5 text-brand-600" />{translate("F&B Dashboard")}<select className={inputCls + " font-normal"} value={outlet} onChange={(e) => setOutlet(e.target.value)}>
+          <TrendingUp className="size-5 text-brand-600" />{translate("F&B Dashboard")}<select className={inputCls + " font-normal"} value={outlet} onChange={(e) => handleOutletChange(e.target.value)}>
             {outlets.map((o) => <option key={o.name} value={o.name}>{o.outlet_name}</option>)}
           </select>
         </h1>
@@ -157,10 +197,7 @@ export default function PosDashboard() {
             mode="range"
             fromDate={date}
             toDate={toDate || date}
-            onRangeChange={(from, to) => {
-              setDate(from)
-              setToDate(to === from ? "" : to)
-            }}
+            onRangeChange={handleRangeChange}
             compact
           />
           <Link to="/pos"

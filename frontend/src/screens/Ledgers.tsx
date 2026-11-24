@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { call, getCurrentProperty } from "../lib/api"
 import { serverError } from "../lib/resource"
 import { Button } from "../components/ui/button"
@@ -69,7 +69,13 @@ type Recon = {
 
 export default function Ledgers() {
   const language = useUILanguage()
-  const [date, setDate] = useState("")
+  const [params, setParams] = useSearchParams()
+  const [date, setDate] = useState(() => params.get("date") || "")
+  const [fromDate, setFromDate] = useState(() => params.get("from_date") || "")
+  const [toDate, setToDate] = useState(() => params.get("to_date") || "")
+  const initialMode = Boolean(fromDate && toDate && fromDate !== toDate) ? "range" : "single"
+  const [filterMode, setFilterMode] = useState<"single" | "range">(initialMode)
+
   const [ledgers, setLedgers] = useState<Ledger[]>([])
   const [inBalance, setInBalance] = useState<boolean | null>(true)
   const [recon, setRecon] = useState<Recon | null>(null)
@@ -84,8 +90,43 @@ export default function Ledgers() {
   const { roles } = useAuth()
   const canSettle = roles.some((r) => CAN_SETTLE.includes(r))
 
+  const handleDateChange = (newDate: string) => {
+    setDate(newDate)
+    setFromDate(newDate)
+    setToDate(newDate)
+    setFilterMode("single")
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("date", newDate)
+        next.delete("from_date")
+        next.delete("to_date")
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  const handleRangeChange = (from: string, to: string) => {
+    setFromDate(from)
+    setToDate(to)
+    setDate(to)
+    setFilterMode("range")
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("from_date", from)
+        next.set("to_date", to)
+        next.delete("date")
+        return next
+      },
+      { replace: true },
+    )
+  }
+
   const load = useCallback(async () => {
     try {
+      const isRange = filterMode === "range" || Boolean(fromDate && toDate && fromDate !== toDate)
       const bal = await call<{
         business_date: string
         ledgers: Ledger[]
@@ -95,18 +136,20 @@ export default function Ledgers() {
         reconciliation: Recon | null
       }>("izensphere_stay_and_dine.ledger.ledger_balances", {
         property: getCurrentProperty(),
-        business_date: date || undefined,
+        business_date: (isRange ? toDate : date) || undefined,
       })
       setLedgers(bal.ledgers)
       setInBalance(bal.in_balance)
       setRecon(bal.reconciliation)
       setTotals({ debit: bal.total_debit, credit: bal.total_credit })
-      if (!date) setDate(bal.business_date)
+      if (!date && !toDate) setDate(bal.business_date)
       const j = await call<{ rows: typeof journal }>(
         "izensphere_stay_and_dine.ledger.journal_by_transaction_code",
         {
           property: getCurrentProperty(),
           business_date: bal.business_date,
+          from_date: isRange ? fromDate : undefined,
+          to_date: isRange ? toDate : undefined,
         },
       )
       setJournal(j.rows)
@@ -118,7 +161,7 @@ export default function Ledgers() {
     } catch (e) {
       setErr(serverError(e))
     }
-  }, [date])
+  }, [date, fromDate, toDate, filterMode])
 
   useEffect(() => {
     void load()
@@ -164,10 +207,13 @@ export default function Ledgers() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DateFilterBar
-            mode="single"
+            mode={filterMode}
             allowModeToggle
             date={date}
-            onDateChange={setDate}
+            onDateChange={handleDateChange}
+            fromDate={fromDate || date}
+            toDate={toDate || date}
+            onRangeChange={handleRangeChange}
             label="Date"
             compact
           />

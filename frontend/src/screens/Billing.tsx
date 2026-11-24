@@ -1,7 +1,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { MoonStar } from "lucide-react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { getCurrentProperty } from "../lib/api"
 import { listResource, type Row } from "../lib/resource"
 import { auditHistory, type RunRow } from "../lib/eod"
@@ -38,17 +38,46 @@ const fmtWhen = (d: unknown) =>
 
 export default function Billing() {
   const { t } = useT()
+  const [params, setParams] = useSearchParams()
   const [folios, setFolios] = useState<Row[]>([])
   const [auditRuns, setAuditRuns] = useState<RunRow[]>([])
-  const [dateField, setDateField] = useState("opened_on")
-  const [fromDate, setFromDate] = useState("")
-  const [toDate, setToDate] = useState("")
+  const [dateField, setDateField] = useState(() => params.get("field") || "opened_on")
+  const [fromDate, setFromDate] = useState(() => params.get("from_date") || "")
+  const [toDate, setToDate] = useState(() => params.get("to_date") || "")
   const navigate = useNavigate()
+
+  const handleRangeChange = (from: string, to: string) => {
+    setFromDate(from)
+    setToDate(to)
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        if (from) next.set("from_date", from)
+        else next.delete("from_date")
+        if (to) next.set("to_date", to)
+        else next.delete("to_date")
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  const handleFieldChange = (field: string) => {
+    setDateField(field)
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("field", field)
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const load = useCallback(() => {
     const filters: (string | number)[][] = [["property", "=", getCurrentProperty()]]
     if (fromDate) {
-      filters.push([dateField, ">=", fromDate])
+      filters.push([dateField, ">=", `${fromDate} 00:00:00`])
     }
     if (toDate) {
       filters.push([dateField, "<=", `${toDate} 23:59:59`])
@@ -165,17 +194,14 @@ export default function Billing() {
             mode="range"
             fromDate={fromDate}
             toDate={toDate}
-            onRangeChange={(from, to) => {
-              setFromDate(from)
-              setToDate(to)
-            }}
+            onRangeChange={handleRangeChange}
             fieldOptions={[
               { label: t("Opened Date"), id: "opened_on" },
               { label: t("Closed Date"), id: "closed_on" },
               { label: t("Created Date"), id: "creation" },
             ]}
             selectedField={dateField}
-            onFieldChange={setDateField}
+            onFieldChange={handleFieldChange}
             compact
           />
         </CardHeader>

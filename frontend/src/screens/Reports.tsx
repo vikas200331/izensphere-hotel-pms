@@ -208,7 +208,7 @@ export default function Reports({ initialTab = "saved" }: { initialTab?: Tab }) 
     call<Flash>("izensphere_stay_and_dine.reports.manager_flash", {
       property,
       date: flashDate,
-      from_date: flashFrom && flashFrom < flashDate ? flashFrom : undefined,
+      from_date: flashFrom || undefined,
     })
       .then(setFlash)
       .catch((e) => setError((e as Error).message))
@@ -1025,7 +1025,7 @@ function FlashPanel(props: {
           fromDate={from || date}
           toDate={date}
           onRangeChange={(f, to) => {
-            setFrom(f === to ? "" : f)
+            setFrom(f)
             setDate(to)
           }}
           compact

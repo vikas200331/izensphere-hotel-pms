@@ -3615,9 +3615,11 @@ def _stay_balance(reservation: str) -> dict:
 
 @frappe.whitelist()
 @require_roles("Front Desk", "Night Auditor", "Kamra Agent", "Finance", "Revenue Manager")
-def front_desk_snapshot(property: str | None = None, date: str | None = None):
-	"""Everything the front desk needs for one day, in one call."""
+def front_desk_snapshot(property: str | None = None, date: str | None = None,
+                        to_date: str | None = None):
+	"""Everything the front desk needs for one day or a date range, in one call."""
 	date = date or nowdate()
+	end_date = to_date or date
 	today = nowdate()
 
 	scope = property or _property_scope()
@@ -3629,21 +3631,21 @@ def front_desk_snapshot(property: str | None = None, date: str | None = None):
 		"booker_relation", "contact_preference", "company",
 	]
 
-	# Date-aware arrivals
-	if date < today:
-		arr_statuses = ["Checked In", "Checked Out"]
+	# Date-aware arrivals: check_in_date in [date, end_date]
+	arr_statuses = ["Confirmed", "Checked In", "Checked Out"]
+	if date == end_date:
+		res_filters = {"check_in_date": date, "status": ("in", arr_statuses)}
 	else:
-		arr_statuses = ["Confirmed", "Checked In"]
-	res_filters = {"check_in_date": date, "status": ("in", arr_statuses)}
+		res_filters = {"check_in_date": ["between", [date, end_date]], "status": ("in", arr_statuses)}
 	if scope:
 		res_filters["property"] = scope
 
-	# Date-aware departures
-	if date < today:
-		dep_statuses = ["Checked Out"]
+	# Date-aware departures: check_out_date in [date, end_date]
+	dep_statuses = ["Checked In", "Checked Out"]
+	if date == end_date:
+		dep_filters = {"check_out_date": date, "status": ("in", dep_statuses)}
 	else:
-		dep_statuses = ["Checked In", "Checked Out"]
-	dep_filters = {"check_out_date": date, "status": ("in", dep_statuses)}
+		dep_filters = {"check_out_date": ["between", [date, end_date]], "status": ("in", dep_statuses)}
 	if scope:
 		dep_filters["property"] = scope
 
@@ -3657,7 +3659,7 @@ def front_desk_snapshot(property: str | None = None, date: str | None = None):
 	)
 
 	# Date-aware in-house
-	if date == today:
+	if date == end_date and date == today:
 		inh_filters = {"status": "Checked In"}
 		if scope:
 			inh_filters["property"] = scope
@@ -3666,19 +3668,24 @@ def front_desk_snapshot(property: str | None = None, date: str | None = None):
 			order_by="room asc",
 		)
 	else:
-		inh_conds = [
-			"check_in_date <= %(date)s",
-			"check_out_date > %(date)s",
-			"status NOT IN ('Cancelled', 'No Show')",
-		]
-		inh_params = {"date": date}
+		if date == end_date:
+			inh_conds = [
+				"check_in_date <= %(end_date)s",
+				"check_out_date > %(date)s",
+				"status NOT IN ('Cancelled', 'No Show')",
+			]
+		else:
+			# Stay overlap logic: check_in < to_date AND check_out > from_date
+			inh_conds = [
+				"check_in_date < %(end_date)s",
+				"check_out_date > %(date)s",
+				"status NOT IN ('Cancelled', 'No Show')",
+			]
+		inh_params = {"date": date, "end_date": end_date}
 		if scope:
 			inh_conds.append("property = %(property)s")
 			inh_params["property"] = scope
-		if date < today:
-			inh_conds.append("status IN ('Checked In', 'Checked Out')")
-		else:
-			inh_conds.append("status IN ('Confirmed', 'Checked In')")
+		inh_conds.append("status IN ('Confirmed', 'Checked In', 'Checked Out')")
 		in_house = frappe.db.sql(
 			f"""SELECT {', '.join(res_fields)} FROM `tabReservation`
 			WHERE {' AND '.join(inh_conds)}

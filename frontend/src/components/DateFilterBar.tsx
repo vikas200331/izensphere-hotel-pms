@@ -256,8 +256,11 @@ export default function DateFilterBar({
     return localFrom > localTo
   }, [activeMode, localFrom, localTo])
 
-  // Can toggle mode if not explicitly disabled
-  const canToggleMode = allowModeToggle !== false
+  // Only allow toggle if allowModeToggle is explicitly true,
+  // or if both onDateChange and onRangeChange are provided and allowModeToggle is not false
+  const canToggleMode =
+    allowModeToggle === true ||
+    (allowModeToggle !== false && Boolean(onDateChange && onRangeChange))
 
   const singlePresets: { key: PresetKey; label: string }[] = useMemo(
     () => [
@@ -412,8 +415,10 @@ export default function DateFilterBar({
               type="button"
               onClick={() => {
                 setActiveMode("range")
-                const curFrom = fromDate || date || todayStr
-                const curTo = toDate && toDate >= curFrom ? toDate : shiftDate(curFrom, 1)
+                const curFrom = localFrom || fromDate || date || todayStr
+                const curTo = localTo && localTo >= curFrom ? localTo : shiftDate(curFrom, 1)
+                setLocalFrom(curFrom)
+                setLocalTo(curTo)
                 if (onRangeChange) {
                   onRangeChange(curFrom, curTo)
                 }
@@ -550,7 +555,9 @@ export default function DateFilterBar({
             type="button"
             onClick={() => {
               setActiveMode("single")
-              if (onDateChange) onDateChange(fromDate || date || todayStr)
+              const d = localSingleDate || localFrom || fromDate || date || todayStr
+              setLocalSingleDate(d)
+              if (onDateChange) onDateChange(d)
             }}
             className="rounded-md px-2 py-0.5 text-xs transition-colors cursor-pointer text-zinc-600 hover:text-zinc-900"
           >

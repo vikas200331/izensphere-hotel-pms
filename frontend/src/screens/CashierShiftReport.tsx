@@ -35,8 +35,10 @@ export default function CashierShiftReport() {
   // the country's instant modes (system_upi bucket), "" where it has none
   const instant = useLocale().instant_payment_modes.join(" / ")
   const [params, setParams] = useSearchParams()
-  const [date, setDate] = useState("")
-  const [toDate, setToDate] = useState("") // "" = the one business date
+  const paramFrom = params.get("from_date") || params.get("date") || ""
+  const paramTo = params.get("to_date") || ""
+  const [date, setDate] = useState(paramFrom)
+  const [toDate, setToDate] = useState(paramTo || paramFrom)
   const [report, setReport] = useState<{
     business_date: string
     sessions: SessionRow[]
@@ -129,7 +131,16 @@ export default function CashierShiftReport() {
             toDate={toDate || date}
             onRangeChange={(f, t) => {
               setDate(f)
-              setToDate(t === f ? "" : t)
+              setToDate(t)
+              setParams(
+                (p) => {
+                  const next = new URLSearchParams(p)
+                  next.set("from_date", f)
+                  next.set("to_date", t)
+                  return next
+                },
+                { replace: true },
+              )
             }}
             compact
           />
