@@ -236,24 +236,6 @@ export default function Rooms() {
     return () => clearInterval(id)
   }, [load, refreshKey])
 
-  useEffect(() => {
-    const f = params.get("from_date") || params.get("date") || todayStr
-    const to = params.get("to_date") || (f ? addDaysYMD(f, 1) : tomorrowStr)
-    const v = (params.get("board_view") as "daily" | "weekly" | "monthly") || "daily"
-
-    if (f !== fromDate || to !== toDate || v !== boardView) {
-      setFromDate(f)
-      setToDate(to)
-      setBoardView(v)
-      if (f <= to) {
-        setDateError(null)
-        load(f, to, v)
-      } else {
-        setDateError(translate("To Date must be greater than or equal to From Date."))
-      }
-    }
-  }, [params, load, todayStr, tomorrowStr])
-
   const setParam = (k: string, v: string | null) =>
     setParams(
       (p) => {
@@ -265,6 +247,64 @@ export default function Rooms() {
       { replace: k !== "room" },
     )
 
+  const updateUrlDates = useCallback(
+    (newFrom?: string, newTo?: string, viewMode?: string) => {
+      setParams(
+        (p) => {
+          const n = new URLSearchParams(p)
+          if (newFrom) {
+            n.set("from_date", newFrom)
+            n.set("date", newFrom)
+          } else {
+            n.delete("from_date")
+            n.delete("date")
+          }
+          if (newTo) {
+            n.set("to_date", newTo)
+          } else {
+            n.delete("to_date")
+          }
+          if (viewMode && viewMode !== "daily") {
+            n.set("board_view", viewMode)
+          } else {
+            n.delete("board_view")
+          }
+          return n
+        },
+        { replace: true },
+      )
+    },
+    [setParams],
+  )
+
+  useEffect(() => {
+    const f = params.get("from_date") || params.get("date")
+    const to = params.get("to_date")
+    const v = (params.get("board_view") as "daily" | "weekly" | "monthly") || "daily"
+
+    let changed = false
+    if (f && f !== fromDate) {
+      setFromDate(f)
+      changed = true
+    }
+    if (to && to !== toDate) {
+      setToDate(to)
+      changed = true
+    }
+    if (v !== boardView) {
+      setBoardView(v)
+      changed = true
+    }
+    if (changed) {
+      const activeF = f || fromDate
+      const activeTo = to || toDate
+      if (activeF && activeTo && activeF <= activeTo) {
+        setDateError(null)
+        load(activeF, activeTo, v)
+      }
+    }
+  }, [params])
+
   const currentDate = fromDate || todayStr
   const isToday = currentDate === todayStr
 
@@ -274,16 +314,11 @@ export default function Rooms() {
 
     if (newFrom && newTo && newFrom > newTo) {
       setDateError(translate("To Date must be greater than or equal to From Date."))
-      setParam("from_date", newFrom)
-      setParam("date", newFrom)
-      setParam("to_date", newTo)
       return
     }
 
     setDateError(null)
-    setParam("from_date", newFrom)
-    setParam("date", newFrom)
-    setParam("to_date", newTo)
+    updateUrlDates(newFrom, newTo, boardView)
     load(newFrom, newTo, boardView)
   }
 
@@ -293,15 +328,13 @@ export default function Rooms() {
     setFromDate(newFrom)
     setToDate(newTo)
     setDateError(null)
-    setParam("from_date", newFrom)
-    setParam("date", newFrom)
-    setParam("to_date", newTo)
+    updateUrlDates(newFrom, newTo, boardView)
     load(newFrom, newTo, boardView)
   }
 
   const handleViewChange = (v: "daily" | "weekly" | "monthly") => {
     setBoardView(v)
-    setParam("board_view", v === "daily" ? null : v)
+    updateUrlDates(fromDate, toDate, v)
     load(fromDate, toDate, v)
   }
 

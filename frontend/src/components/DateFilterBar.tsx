@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react"
 import {
   Calendar,
+  Check,
   ChevronLeft,
   ChevronRight,
   RotateCcw,
@@ -223,15 +224,37 @@ export default function DateFilterBar({
   const todayStr = useMemo(() => getToday(), [])
   const [activeMode, setActiveMode] = useState<"single" | "range">(mode)
 
-  const isInvalidRange = useMemo(() => {
-    if (activeMode !== "range") return false
-    if (!fromDate || !toDate) return false
-    return fromDate > toDate
-  }, [activeMode, fromDate, toDate])
+  // Local independent variables for input date-pickers so custom selections work seamlessly
+  const [localFrom, setLocalFrom] = useState<string>(fromDate || date || todayStr)
+  const [localTo, setLocalTo] = useState<string>(
+    toDate || (fromDate ? shiftDate(fromDate, 1) : shiftDate(todayStr, 1)),
+  )
+  const [localSingleDate, setLocalSingleDate] = useState<string>(date || todayStr)
 
   useEffect(() => {
     setActiveMode(mode)
   }, [mode])
+
+  useEffect(() => {
+    const f = fromDate || date || todayStr
+    setLocalFrom(f)
+  }, [fromDate, date, todayStr])
+
+  useEffect(() => {
+    const to = toDate || (fromDate ? shiftDate(fromDate, 1) : shiftDate(todayStr, 1))
+    setLocalTo(to)
+  }, [toDate, fromDate, todayStr])
+
+  useEffect(() => {
+    if (date) setLocalSingleDate(date)
+    else setLocalSingleDate(todayStr)
+  }, [date, todayStr])
+
+  const isInvalidRange = useMemo(() => {
+    if (activeMode !== "range") return false
+    if (!localFrom || !localTo) return false
+    return localFrom > localTo
+  }, [activeMode, localFrom, localTo])
 
   // Can toggle mode if not explicitly disabled
   const canToggleMode = allowModeToggle !== false
@@ -260,37 +283,40 @@ export default function DateFilterBar({
   )
 
   const activeRangePreset = useMemo(() => {
-    if (!fromDate && !toDate) return null
+    if (!localFrom && !localTo) return null
     for (const p of defaultRangePresets) {
       const r = calculateDateRange(p.key)
-      if (r.from === fromDate && r.to === toDate) {
+      if (r.from === localFrom && r.to === localTo) {
         return p.key
       }
     }
     return null
-  }, [fromDate, toDate, defaultRangePresets])
+  }, [localFrom, localTo, defaultRangePresets])
 
   // Single date navigation
   const handlePrevDay = () => {
-    const cur = date || todayStr
+    const cur = localSingleDate || todayStr
     const prev = shiftDate(cur, -1)
     if (prev) {
+      setLocalSingleDate(prev)
       if (onDateChange) onDateChange(prev)
-      if (onRangeChange) onRangeChange(prev, prev)
+      if (onRangeChange) onRangeChange(prev, shiftDate(prev, 1))
     }
   }
 
   const handleNextDay = () => {
-    const cur = date || todayStr
+    const cur = localSingleDate || todayStr
     const next = shiftDate(cur, 1)
     if (next) {
+      setLocalSingleDate(next)
       if (onDateChange) onDateChange(next)
-      if (onRangeChange) onRangeChange(next, next)
+      if (onRangeChange) onRangeChange(next, shiftDate(next, 1))
     }
   }
 
   const handleSinglePreset = (preset: PresetKey) => {
     const r = calculateDateRange(preset)
+    setLocalSingleDate(r.from)
     if (onDateChange) onDateChange(r.from)
     if (onRangeChange) onRangeChange(r.from, r.to)
   }
@@ -298,8 +324,8 @@ export default function DateFilterBar({
   // Range navigation (shifts range by its span in days, minimum 1 day)
   const handleShiftRange = (direction: -1 | 1) => {
     if (!onRangeChange) return
-    const f = parseDate(fromDate || todayStr)
-    const tDate = parseDate(toDate || fromDate || todayStr)
+    const f = parseDate(localFrom || todayStr)
+    const tDate = parseDate(localTo || localFrom || todayStr)
     if (!f || !tDate) return
     const spanDays = Math.max(
       1,
@@ -307,23 +333,45 @@ export default function DateFilterBar({
     )
     const newFrom = shiftDate(isoDate(f), direction * spanDays)
     const newTo = shiftDate(isoDate(tDate), direction * spanDays)
+    setLocalFrom(newFrom)
+    setLocalTo(newTo)
     onRangeChange(newFrom, newTo)
     if (onDateChange) onDateChange(newFrom)
   }
 
   const handleRangePreset = (preset: PresetKey) => {
     const r = calculateDateRange(preset)
+    setLocalFrom(r.from)
+    setLocalTo(r.to)
     if (onRangeChange) onRangeChange(r.from, r.to)
     if (onDateChange) onDateChange(r.from)
   }
 
+  const handleApplyRange = () => {
+    if (localFrom && localTo && localFrom <= localTo) {
+      if (onRangeChange) onRangeChange(localFrom, localTo)
+      if (onDateChange) onDateChange(localFrom)
+    }
+  }
+
+  const handleApplySingle = () => {
+    if (localSingleDate) {
+      if (onDateChange) onDateChange(localSingleDate)
+      if (onRangeChange) onRangeChange(localSingleDate, shiftDate(localSingleDate, 1))
+    }
+  }
+
   const handleClear = () => {
     if (activeMode === "single") {
+      setLocalSingleDate(todayStr)
       if (onDateChange) onDateChange(todayStr)
-      if (onRangeChange) onRangeChange(todayStr, todayStr)
+      if (onRangeChange) onRangeChange(todayStr, shiftDate(todayStr, 1))
     } else {
-      if (onRangeChange) onRangeChange("", "")
-      if (onDateChange) onDateChange("")
+      setLocalFrom(todayStr)
+      const nextD = shiftDate(todayStr, 1)
+      setLocalTo(nextD)
+      if (onRangeChange) onRangeChange(todayStr, nextD)
+      if (onDateChange) onDateChange(todayStr)
     }
   }
 
@@ -426,11 +474,14 @@ export default function DateFilterBar({
               type="date"
               aria-label={t("Select date")}
               className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
-              value={date || todayStr}
+              value={localSingleDate}
               onChange={(e) => {
                 const d = e.target.value
-                if (onDateChange) onDateChange(d)
-                if (onRangeChange) onRangeChange(d, shiftDate(d, 1))
+                setLocalSingleDate(d)
+                if (d) {
+                  if (onDateChange) onDateChange(d)
+                  if (onRangeChange) onRangeChange(d, shiftDate(d, 1))
+                }
               }}
             />
           </div>
@@ -446,6 +497,16 @@ export default function DateFilterBar({
               <ChevronRight className="size-4" />
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={handleApplySingle}
+            className="inline-flex items-center gap-1 rounded-lg border border-brand-600 bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-brand-700 active:bg-brand-800 transition-colors cursor-pointer"
+            title={t("Apply chosen date")}
+          >
+            <Check className="size-3.5" />
+            <span>{t("Apply")}</span>
+          </button>
         </div>
 
         {/* Display friendly date string */}
@@ -551,9 +612,9 @@ export default function DateFilterBar({
         </div>
       )}
 
-      {/* Range inputs with stepper and prominent From Date - To Date labels */}
+      {/* Range inputs with stepper, explicit From Date - To Date labels, and Apply action */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {showNavigation && (fromDate || toDate) && (
+        {showNavigation && (localFrom || localTo) && (
           <button
             type="button"
             onClick={() => handleShiftRange(-1)}
@@ -581,11 +642,14 @@ export default function DateFilterBar({
             type="date"
             aria-label={t("From Date")}
             className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
-            value={fromDate || date || todayStr}
+            value={localFrom}
             onChange={(e) => {
               const newFrom = e.target.value
-              const currentTo = toDate || shiftDate(newFrom, 1)
-              if (onRangeChange) onRangeChange(newFrom, currentTo)
+              setLocalFrom(newFrom)
+              if (newFrom && localTo && newFrom <= localTo) {
+                if (onRangeChange) onRangeChange(newFrom, localTo)
+                if (onDateChange) onDateChange(newFrom)
+              }
             }}
           />
         </div>
@@ -608,16 +672,19 @@ export default function DateFilterBar({
             type="date"
             aria-label={t("To Date")}
             className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
-            value={toDate || (fromDate ? shiftDate(fromDate, 1) : shiftDate(todayStr, 1))}
+            value={localTo}
             onChange={(e) => {
               const newTo = e.target.value
-              const currentFrom = fromDate || date || todayStr
-              if (onRangeChange) onRangeChange(currentFrom, newTo)
+              setLocalTo(newTo)
+              if (newTo && localFrom && localFrom <= newTo) {
+                if (onRangeChange) onRangeChange(localFrom, newTo)
+                if (onDateChange) onDateChange(localFrom)
+              }
             }}
           />
         </div>
 
-        {showNavigation && (fromDate || toDate) && (
+        {showNavigation && (localFrom || localTo) && (
           <button
             type="button"
             onClick={() => handleShiftRange(1)}
@@ -629,6 +696,23 @@ export default function DateFilterBar({
           </button>
         )}
 
+        {/* Explicit Apply Button for Custom Range Choice */}
+        <button
+          type="button"
+          onClick={handleApplyRange}
+          disabled={!localFrom || !localTo || isInvalidRange}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold shadow-xs transition-colors cursor-pointer",
+            !localFrom || !localTo || isInvalidRange
+              ? "border-zinc-200 bg-zinc-100 text-zinc-400 cursor-not-allowed"
+              : "border-brand-600 bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800",
+          )}
+          title={t("Apply chosen date filter")}
+        >
+          <Check className="size-3.5" />
+          <span>{t("Apply")}</span>
+        </button>
+
         {isInvalidRange && (
           <span className="inline-flex items-center gap-1 rounded bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 border border-rose-200">
             ⚠️ {t("To Date must be greater than or equal to From Date")}
@@ -637,14 +721,19 @@ export default function DateFilterBar({
       </div>
 
       {/* Friendly range label with days count */}
-      {(fromDate || toDate) && (
-        <span className="font-medium text-zinc-500 text-xs ml-1 select-none">
-          {formatFriendlyRange(fromDate, toDate)}
+      {(localFrom || localTo) && !isInvalidRange && (
+        <span className="font-medium text-zinc-600 text-xs ml-1 select-none flex items-center gap-1.5">
+          <span>{formatFriendlyRange(localFrom, localTo)}</span>
+          {!activeRangePreset && (
+            <span className="rounded bg-zinc-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-700">
+              {t("Custom")}
+            </span>
+          )}
         </span>
       )}
 
       {/* Clear button */}
-      {showClear && (fromDate || toDate) && (
+      {showClear && (localFrom || localTo) && (
         <button
           type="button"
           onClick={handleClear}
