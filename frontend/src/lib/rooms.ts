@@ -113,6 +113,7 @@ export interface RoomsSummary {
 }
 
 export interface RoomsBoard {
+  from_date?: string
   date: string
   to_date?: string
   today?: string
@@ -124,10 +125,16 @@ export interface RoomsBoard {
   can: RoomPermissions
 }
 
-export const getRoomsBoard = (date?: string, toDate?: string, view: string = "daily") =>
+export const getRoomsBoard = (
+  date?: string,
+  toDate?: string,
+  view: string = "daily",
+  fromDate?: string,
+) =>
   call<RoomsBoard>("izensphere_stay_and_dine.rooms.rooms_board", {
     property: getCurrentProperty(),
-    date: date || undefined,
+    from_date: fromDate || date || undefined,
+    date: date || fromDate || undefined,
     to_date: toDate || undefined,
     view: view || undefined,
   })

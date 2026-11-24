@@ -223,6 +223,12 @@ export default function DateFilterBar({
   const todayStr = useMemo(() => getToday(), [])
   const [activeMode, setActiveMode] = useState<"single" | "range">(mode)
 
+  const isInvalidRange = useMemo(() => {
+    if (activeMode !== "range") return false
+    if (!fromDate || !toDate) return false
+    return fromDate > toDate
+  }, [activeMode, fromDate, toDate])
+
   useEffect(() => {
     setActiveMode(mode)
   }, [mode])
@@ -358,12 +364,10 @@ export default function DateFilterBar({
               type="button"
               onClick={() => {
                 setActiveMode("range")
-                const initial = date || todayStr
+                const curFrom = fromDate || date || todayStr
+                const curTo = toDate && toDate >= curFrom ? toDate : shiftDate(curFrom, 1)
                 if (onRangeChange) {
-                  onRangeChange(fromDate || initial, toDate || initial)
-                }
-                if (onDateChange && !date) {
-                  onDateChange(initial)
+                  onRangeChange(curFrom, curTo)
                 }
               }}
               className="rounded-md px-2 py-0.5 text-xs transition-colors cursor-pointer text-zinc-600 hover:text-zinc-900"
@@ -426,7 +430,7 @@ export default function DateFilterBar({
               onChange={(e) => {
                 const d = e.target.value
                 if (onDateChange) onDateChange(d)
-                if (onRangeChange) onRangeChange(d, d)
+                if (onRangeChange) onRangeChange(d, shiftDate(d, 1))
               }}
             />
           </div>
@@ -562,7 +566,14 @@ export default function DateFilterBar({
         )}
 
         {/* From Date with explicit visible label badge */}
-        <div className="flex items-center rounded-lg border border-zinc-200 bg-white shadow-xs focus-within:border-brand-600 focus-within:ring-1 focus-within:ring-brand-600">
+        <div
+          className={cn(
+            "flex items-center rounded-lg border bg-white shadow-xs focus-within:ring-1",
+            isInvalidRange
+              ? "border-rose-400 focus-within:border-rose-500 focus-within:ring-rose-500"
+              : "border-zinc-200 focus-within:border-brand-600 focus-within:ring-brand-600",
+          )}
+        >
           <span className="rounded-l-lg border-r border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-600 select-none">
             {t("From Date")}
           </span>
@@ -570,15 +581,11 @@ export default function DateFilterBar({
             type="date"
             aria-label={t("From Date")}
             className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
-            value={fromDate || date}
+            value={fromDate || date || todayStr}
             onChange={(e) => {
               const newFrom = e.target.value
-              let newTo = toDate || date || newFrom
-              if (newFrom && newTo && newFrom > newTo) {
-                newTo = newFrom
-              }
-              if (onRangeChange) onRangeChange(newFrom, newTo)
-              if (onDateChange) onDateChange(newFrom)
+              const currentTo = toDate || shiftDate(newFrom, 1)
+              if (onRangeChange) onRangeChange(newFrom, currentTo)
             }}
           />
         </div>
@@ -586,7 +593,14 @@ export default function DateFilterBar({
         <span className="text-xs font-semibold text-zinc-400 select-none">→</span>
 
         {/* To Date with explicit visible label badge */}
-        <div className="flex items-center rounded-lg border border-zinc-200 bg-white shadow-xs focus-within:border-brand-600 focus-within:ring-1 focus-within:ring-brand-600">
+        <div
+          className={cn(
+            "flex items-center rounded-lg border bg-white shadow-xs focus-within:ring-1",
+            isInvalidRange
+              ? "border-rose-400 focus-within:border-rose-500 focus-within:ring-rose-500"
+              : "border-zinc-200 focus-within:border-brand-600 focus-within:ring-brand-600",
+          )}
+        >
           <span className="rounded-l-lg border-r border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-600 select-none">
             {t("To Date")}
           </span>
@@ -594,12 +608,11 @@ export default function DateFilterBar({
             type="date"
             aria-label={t("To Date")}
             className="rounded-r-lg bg-transparent px-2.5 py-1 text-xs text-zinc-800 focus:outline-none cursor-pointer"
-            value={toDate || date}
-            min={fromDate || date || undefined}
+            value={toDate || (fromDate ? shiftDate(fromDate, 1) : shiftDate(todayStr, 1))}
             onChange={(e) => {
               const newTo = e.target.value
-              const curFrom = fromDate || date || newTo
-              if (onRangeChange) onRangeChange(curFrom, newTo)
+              const currentFrom = fromDate || date || todayStr
+              if (onRangeChange) onRangeChange(currentFrom, newTo)
             }}
           />
         </div>
@@ -614,6 +627,12 @@ export default function DateFilterBar({
           >
             <ChevronRight className="size-4" />
           </button>
+        )}
+
+        {isInvalidRange && (
+          <span className="inline-flex items-center gap-1 rounded bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 border border-rose-200">
+            ⚠️ {t("To Date must be greater than or equal to From Date")}
+          </span>
         )}
       </div>
 

@@ -180,13 +180,21 @@ export default function Rooms() {
   const [params, setParams] = useSearchParams()
   const view = params.get("view") === "insights" ? "insights" : "board"
   const open = params.get("room")
-  const dateParam = params.get("date") || ""
+
+  const todayStr = useMemo(() => formatYMD(new Date()), [])
+  const tomorrowStr = useMemo(() => addDaysYMD(todayStr, 1), [todayStr])
+
+  const fromDateParam = params.get("from_date") || params.get("date") || ""
   const toDateParam = params.get("to_date") || ""
   const boardViewParam = (params.get("board_view") as "daily" | "weekly" | "monthly") || "daily"
 
-  const [selectedDate, setSelectedDate] = useState<string>(dateParam)
-  const [toDate, setToDate] = useState<string>(toDateParam)
+  // Two independent variables for From Date and To Date
+  const [fromDate, setFromDate] = useState<string>(fromDateParam || todayStr)
+  const [toDate, setToDate] = useState<string>(
+    toDateParam || (fromDateParam ? addDaysYMD(fromDateParam, 1) : tomorrowStr),
+  )
   const [boardView, setBoardView] = useState<"daily" | "weekly" | "monthly">(boardViewParam)
+  const [dateError, setDateError] = useState<string | null>(null)
 
   const [board, setBoard] = useState<RoomsBoard | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -202,18 +210,24 @@ export default function Rooms() {
   const [drawerKey, setDrawerKey] = useState(0)
 
   const load = useCallback(
-    (targetDate?: string, targetToDate?: string, targetView?: "daily" | "weekly" | "monthly") => {
-      const d = targetDate !== undefined ? targetDate : selectedDate
-      const to = targetToDate !== undefined ? targetToDate : toDate
+    (targetFrom?: string, targetTo?: string, targetView?: "daily" | "weekly" | "monthly") => {
+      const f = targetFrom !== undefined ? targetFrom : fromDate
+      const to = targetTo !== undefined ? targetTo : toDate
       const v = targetView !== undefined ? targetView : boardView
-      getRoomsBoard(d || undefined, to || undefined, v)
+
+      // If invalid date range, halt backend API request
+      if (f && to && f > to) {
+        return
+      }
+
+      getRoomsBoard(f || undefined, to || undefined, v, f || undefined)
         .then((b) => {
           setBoard(b)
           setError(null)
         })
         .catch((e) => setError(serverError(e)))
     },
-    [selectedDate, toDate, boardView],
+    [fromDate, toDate, boardView],
   )
 
   useEffect(() => {
@@ -223,13 +237,22 @@ export default function Rooms() {
   }, [load, refreshKey])
 
   useEffect(() => {
-    if (dateParam !== selectedDate || toDateParam !== toDate || boardViewParam !== boardView) {
-      setSelectedDate(dateParam)
-      setToDate(toDateParam)
-      setBoardView(boardViewParam)
-      load(dateParam, toDateParam, boardViewParam)
+    const f = params.get("from_date") || params.get("date") || todayStr
+    const to = params.get("to_date") || (f ? addDaysYMD(f, 1) : tomorrowStr)
+    const v = (params.get("board_view") as "daily" | "weekly" | "monthly") || "daily"
+
+    if (f !== fromDate || to !== toDate || v !== boardView) {
+      setFromDate(f)
+      setToDate(to)
+      setBoardView(v)
+      if (f <= to) {
+        setDateError(null)
+        load(f, to, v)
+      } else {
+        setDateError(translate("To Date must be greater than or equal to From Date."))
+      }
     }
-  }, [dateParam, toDateParam, boardViewParam, load])
+  }, [params, load, todayStr, tomorrowStr])
 
   const setParam = (k: string, v: string | null) =>
     setParams(
@@ -242,33 +265,54 @@ export default function Rooms() {
       { replace: k !== "room" },
     )
 
-  const todayStr = board?.today || formatYMD(new Date())
-  const currentDate = selectedDate || board?.date || todayStr
+  const currentDate = fromDate || todayStr
   const isToday = currentDate === todayStr
 
-  const handleSelectDate = (newDate: string) => {
-    setSelectedDate(newDate)
-    setParam("date", newDate === todayStr ? null : newDate)
-    load(newDate, toDate, boardView)
+  const handleRangeChange = (newFrom: string, newTo: string) => {
+    setFromDate(newFrom)
+    setToDate(newTo)
+
+    if (newFrom && newTo && newFrom > newTo) {
+      setDateError(translate("To Date must be greater than or equal to From Date."))
+      setParam("from_date", newFrom)
+      setParam("date", newFrom)
+      setParam("to_date", newTo)
+      return
+    }
+
+    setDateError(null)
+    setParam("from_date", newFrom)
+    setParam("date", newFrom)
+    setParam("to_date", newTo)
+    load(newFrom, newTo, boardView)
   }
 
-  const handleRangeChange = (from: string, to: string) => {
-    setSelectedDate(from)
-    setToDate(to)
-    setParam("date", from === todayStr ? null : from)
-    setParam("to_date", to === from ? null : to)
-    load(from, to, boardView)
+  const handleSelectDate = (newDate: string) => {
+    const newFrom = newDate
+    const newTo = toDate && toDate >= newFrom ? toDate : addDaysYMD(newFrom, 1)
+    setFromDate(newFrom)
+    setToDate(newTo)
+    setDateError(null)
+    setParam("from_date", newFrom)
+    setParam("date", newFrom)
+    setParam("to_date", newTo)
+    load(newFrom, newTo, boardView)
   }
 
   const handleViewChange = (v: "daily" | "weekly" | "monthly") => {
     setBoardView(v)
     setParam("board_view", v === "daily" ? null : v)
-    load(selectedDate, toDate, v)
+    load(fromDate, toDate, v)
   }
 
   const shiftDate = (days: number) => {
-    const nextDate = addDaysYMD(currentDate, days)
-    handleSelectDate(nextDate)
+    const nextFrom = addDaysYMD(fromDate, days)
+    const span = Math.max(
+      1,
+      Math.round((parseYMD(toDate).getTime() - parseYMD(fromDate).getTime()) / 86400000),
+    )
+    const nextTo = addDaysYMD(nextFrom, span)
+    handleRangeChange(nextFrom, nextTo)
   }
 
   const rooms = board?.rooms ?? []
@@ -466,17 +510,23 @@ export default function Rooms() {
 
           {/* Unified Date Filter Control with Single Day and From Date - To Date support */}
           {boardView === "daily" && (
-            <div className="mb-4">
+            <div className="mb-4 space-y-1">
               <DateFilterBar
-                mode="single"
+                mode="range"
                 allowModeToggle
-                date={currentDate}
+                date={fromDate}
                 onDateChange={handleSelectDate}
-                fromDate={selectedDate || currentDate}
-                toDate={toDate || currentDate}
+                fromDate={fromDate}
+                toDate={toDate}
                 onRangeChange={handleRangeChange}
                 label="Room Status Date"
               />
+              {dateError && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">
+                  <span aria-hidden>⚠️</span>
+                  <span>{dateError}</span>
+                </div>
+              )}
             </div>
           )}
 

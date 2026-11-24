@@ -90,11 +90,12 @@ def _source_label(source: str | None, channel: str | None = None) -> str:
 
 @frappe.whitelist()
 @require_roles(*BOARD_ROLES)
-def rooms_board(property: str, date: str | None = None, to_date: str | None = None, view: str = "daily"):
+def rooms_board(property: str, date: str | None = None, to_date: str | None = None,
+                from_date: str | None = None, view: str = "daily"):
 	"""Every room of the property as a tile or matrix: reservation availability status,
 	housekeeping status, reservation details (guest, booking ref, source),
 	check-in/out indicators, and open tasks.
-	Supports single-date, date range, and daily/weekly/monthly views."""
+	Supports single-date, date range (from_date, to_date), and daily/weekly/monthly views."""
 	assert_property_access(property)
 
 	from izensphere_stay_and_dine.reservation_state import expire_holds
@@ -112,7 +113,7 @@ def rooms_board(property: str, date: str | None = None, to_date: str | None = No
 	if not today:
 		today = getdate(nowdate())
 
-	target_date = getdate(date) if date else today
+	target_date = getdate(from_date) if from_date else (getdate(date) if date else today)
 	is_today = (target_date == today)
 
 	# Determine date window based on to_date and view mode
@@ -295,17 +296,19 @@ def rooms_board(property: str, date: str | None = None, to_date: str | None = No
 		primary_res_status = day_target.get("reservation_status", "Available")
 
 		# If date range requested, determine range availability status
+		# Check stay nights: from target_date up to end_date (checkout date is NOT an occupied night)
 		if to_date and end_date > target_date:
-			all_statuses = [days_map[str(d)]["reservation_status"] for d in dates_list]
-			if "Occupied" in all_statuses:
+			stay_nights = [target_date + datetime.timedelta(days=i) for i in range((end_date - target_date).days)]
+			stay_statuses = [days_map[str(d)]["reservation_status"] for d in stay_nights]
+			if "Occupied" in stay_statuses:
 				range_status = "Occupied"
-			elif "Reserved" in all_statuses:
+			elif "Reserved" in stay_statuses:
 				range_status = "Reserved"
-			elif "Temporary Hold" in all_statuses:
+			elif "Temporary Hold" in stay_statuses:
 				range_status = "Temporary Hold"
-			elif "Blocked" in all_statuses:
+			elif "Blocked" in stay_statuses:
 				range_status = "Blocked"
-			elif "Out of Service" in all_statuses:
+			elif "Out of Service" in stay_statuses:
 				range_status = "Out of Service"
 			else:
 				range_status = "Available"
@@ -324,10 +327,11 @@ def rooms_board(property: str, date: str | None = None, to_date: str | None = No
 		else:
 			r_dict["occupancy_status"] = "Vacant"
 
-		# Find primary reservation details for target date (or first active in range)
+		# Find primary reservation details for target date (or first active in stay range)
 		res_detail = day_target.get("reservation")
 		if not res_detail and to_date and end_date > target_date:
-			for d in dates_list:
+			stay_nights = [target_date + datetime.timedelta(days=i) for i in range((end_date - target_date).days)]
+			for d in stay_nights:
 				if days_map[str(d)].get("reservation"):
 					res_detail = days_map[str(d)]["reservation"]
 					break
@@ -404,6 +408,7 @@ def rooms_board(property: str, date: str | None = None, to_date: str | None = No
 	}
 
 	return {
+		"from_date": str(target_date),
 		"date": str(target_date),
 		"to_date": str(end_date),
 		"today": str(today),

@@ -255,3 +255,73 @@ class TestRoomReservationBoard(IntegrationTestCase):
 		self.assertEqual(r101["reservation_status"], "Reserved")
 		self.assertEqual(r101["housekeeping_status"], "Dirty")
 		self.assertNotEqual(r101["housekeeping_status"], r101["reservation_status"])
+
+	def test_10_date_range_25_to_28_nov_overlap_logic(self):
+		"""Test scenario 1: From Date: 25 November | To Date: 28 November.
+		Reservation from 25 Nov to 27 Nov overlaps.
+		Reservation checking in on 28 Nov does not overlap (checkout date is not an occupied night)."""
+		d_nov25 = "2026-11-25"
+		d_nov27 = "2026-11-27"
+		d_nov28 = "2026-11-28"
+		d_nov30 = "2026-11-30"
+
+		# Room 101: Stay Nov 25 to Nov 27 (overlaps the Nov 25-28 range)
+		create_booking(
+			property=self.property,
+			room_type=self.room_type,
+			check_in_date=d_nov25,
+			check_out_date=d_nov27,
+			guest_name="Guest Range 1",
+			room=self.room_101,
+		)
+
+		# Room 102: Stay Nov 28 to Nov 30 (starts on Nov 28 checkout date -> should be AVAILABLE for 25-28 Nov stay)
+		create_booking(
+			property=self.property,
+			room_type=self.room_type,
+			check_in_date=d_nov28,
+			check_out_date=d_nov30,
+			guest_name="Guest Checkout Day",
+			room=self.room_102,
+		)
+
+		# Check board with from_date=2026-11-25, to_date=2026-11-28
+		board = rooms_board(self.property, from_date=d_nov25, to_date=d_nov28)
+		r101 = next(r for r in board["rooms"] if r["name"] == self.room_101)
+		r102 = next(r for r in board["rooms"] if r["name"] == self.room_102)
+
+		# Room 101 has active reservation on 25 and 26 -> Reserved
+		self.assertEqual(r101["reservation_status"], "Reserved")
+
+		# Room 102 guest checks in on Nov 28 (checkout date of our requested stay) ->
+		# Nov 28 is NOT an occupied night for the 25-28 Nov stay -> Available!
+		self.assertEqual(r102["reservation_status"], "Available")
+
+	def test_11_date_range_25_to_26_nov_single_night(self):
+		"""Test scenario 2: From Date: 25 November | To Date: 26 November.
+		Occupies only the night of 25 November."""
+		d_nov25 = "2026-11-25"
+		d_nov26 = "2026-11-26"
+
+		create_booking(
+			property=self.property,
+			room_type=self.room_type,
+			check_in_date=d_nov25,
+			check_out_date=d_nov26,
+			guest_name="Single Night Guest",
+			room=self.room_101,
+		)
+
+		board = rooms_board(self.property, from_date=d_nov25, to_date=d_nov26)
+		r101 = next(r for r in board["rooms"] if r["name"] == self.room_101)
+		r102 = next(r for r in board["rooms"] if r["name"] == self.room_102)
+
+		self.assertEqual(r101["reservation_status"], "Reserved")
+		self.assertEqual(r102["reservation_status"], "Available")
+
+	def test_12_backend_from_date_and_to_date_independent_parameters(self):
+		"""Verify backend accepts both from_date and to_date independently."""
+		board = rooms_board(self.property, from_date="2026-12-01", to_date="2026-12-05")
+		self.assertEqual(board["from_date"], "2026-12-01")
+		self.assertEqual(board["to_date"], "2026-12-05")
+		self.assertEqual(len(board["dates"]), 5)  # 2026-12-01 through 2026-12-05
