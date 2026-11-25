@@ -789,8 +789,8 @@ def room_insights(property: str, days: int = 30, refresh: int = 0,
 	if from_date:  # a picked range: nights from_date..to_date
 		to_date = to_date or str(add_days(today, -1))
 		days = date_diff(to_date, from_date) + 1
-		if not 1 <= days <= max(INSIGHT_WINDOWS):
-			frappe.throw(f"Pick a range of 1 to {max(INSIGHT_WINDOWS)} days.")
+		if days < 1:
+			frappe.throw(_("The end date is before the start date."))
 		today = str(add_days(to_date, 1))
 	key = f"kamra_room_insights:{property}:{days}:{today}:{int(money)}"
 	cached = None if cint(refresh) else frappe.cache().get_value(key)

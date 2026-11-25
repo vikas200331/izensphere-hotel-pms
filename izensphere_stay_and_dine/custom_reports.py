@@ -671,8 +671,6 @@ def _guard_range(from_date: str | None, to_date: str | None, needs_range: bool):
 	f, t = getdate(from_date), getdate(to_date)
 	if t < f:
 		frappe.throw(_("To date must be on or after from date."))
-	if (t - f).days > MAX_RANGE_DAYS:
-		frappe.throw(_("Date range cannot exceed {0} days.").format(MAX_RANGE_DAYS))
 	return str(f), str(t)
 
 

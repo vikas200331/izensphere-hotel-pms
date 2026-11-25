@@ -242,9 +242,9 @@ class BillSettlementTestCase(AuditTestCase):
 		self.assertLessEqual({b, old}, {r["name"] for r in cash["rows"]})
 		self.assertNotIn(a, {r["name"] for r in cash["rows"]})
 		self.assertEqual(set(cash["totals"]["by_mode"]), {"Cash"})
-		# a year is the most that can be asked for
-		with self.assertRaisesRegex(frappe.ValidationError, "one year"):
-			pos.orders_list(self.outlet, add_days(nowdate(), -400), nowdate())
+		# any range can be asked for (range limits removed per business requirement)
+		res_wide = pos.orders_list(self.outlet, add_days(nowdate(), -400), nowdate())
+		self.assertIn("rows", res_wide)
 
 	def test_order_history_pages_without_changing_the_totals(self):
 		from frappe.utils import nowdate

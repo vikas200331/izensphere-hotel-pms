@@ -1600,8 +1600,6 @@ def orders_list(outlet: str, date: str | None = None, to_date: str | None = None
 	end = getdate(to_date) if to_date else start
 	if end < start:
 		start, end = end, start
-	if (end - start).days > 366:
-		frappe.throw(_("Pick a range of one year or less."))
 	page = max(1, min(cint(limit) or 200, 500))
 	skip = max(0, cint(offset))
 	fields = ["name", "status", "order_type", "room", "reservation", "table_no",
@@ -1738,8 +1736,6 @@ def orders_export(outlet: str, date: str | None = None, to_date: str | None = No
 	end = getdate(to_date) if to_date else start
 	if end < start:
 		start, end = end, start
-	if (end - start).days > 366:
-		frappe.throw(_("Pick a range of one year or less."))
 	or_filters = None
 	qq = (q or "").strip()[:60]
 	if qq:

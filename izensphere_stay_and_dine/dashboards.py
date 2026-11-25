@@ -339,11 +339,11 @@ def portfolio_dashboard(date: str | None = None):
 @frappe.whitelist()
 @require_roles("Finance", "Revenue Manager", "Night Auditor", "Kamra Agent")
 def owner_snapshot(property: str, date: str | None = None, from_date: str | None = None,
-                   period: str | None = None):
+                   period: str | None = None, to_date: str | None = None):
 	"""The owner's phone view of one hotel: the flash for a day (or
 	from_date..date), what guests and companies still owe (as of now), and
 	the last few night audits. Read only; the same figures as the flash and
-	the ledgers. `period` (today, yesterday, month) counts from the
+	the ledgers. `period` (today, yesterday, month, custom) counts from the
 	property's business date, never the phone's clock."""
 	from inspect import unwrap
 
@@ -352,12 +352,19 @@ def owner_snapshot(property: str, date: str | None = None, from_date: str | None
 	from izensphere_stay_and_dine.night_audit import AUDIT_ROLES, night_audit_history
 	from izensphere_stay_and_dine.reports import manager_flash
 
+	if to_date and not date:
+		date = to_date
+
 	if not date:
 		date = get_business_date(property)
 		if period == "yesterday":
 			date = add_days(date, -1)
 		elif period == "month":
 			from_date = str(date)[:8] + "01"
+	elif period == "month" and not from_date:
+		from_date = str(date)[:8] + "01"
+	elif period == "yesterday" and not from_date:
+		date = add_days(date, -1)
 	# this endpoint's gate stands in for the inner endpoints' own gates,
 	# which predate the owner view and leave out some of its roles
 	flash = unwrap(manager_flash)(property, str(date), from_date)

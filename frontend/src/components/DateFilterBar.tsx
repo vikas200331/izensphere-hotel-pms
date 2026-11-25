@@ -39,6 +39,9 @@ export interface DateFilterBarProps {
   /** Allow user to toggle between Single Day and From Date - To Date range */
   allowModeToggle?: boolean
 
+  /** Callback when mode is toggled between single and range */
+  onModeChange?: (mode: "single" | "range") => void
+
   /** Currently selected date in YYYY-MM-DD (single mode) */
   date?: string
   onDateChange?: (date: string) => void
@@ -204,6 +207,7 @@ export function formatFriendlyRange(from?: string, to?: string): string {
 export default function DateFilterBar({
   mode = "range",
   allowModeToggle,
+  onModeChange,
   date = "",
   onDateChange,
   fromDate = "",
@@ -303,7 +307,7 @@ export default function DateFilterBar({
     if (prev) {
       setLocalSingleDate(prev)
       if (onDateChange) onDateChange(prev)
-      if (onRangeChange) onRangeChange(prev, shiftDate(prev, 1))
+      else if (onRangeChange) onRangeChange(prev, shiftDate(prev, 1))
     }
   }
 
@@ -313,7 +317,7 @@ export default function DateFilterBar({
     if (next) {
       setLocalSingleDate(next)
       if (onDateChange) onDateChange(next)
-      if (onRangeChange) onRangeChange(next, shiftDate(next, 1))
+      else if (onRangeChange) onRangeChange(next, shiftDate(next, 1))
     }
   }
 
@@ -321,12 +325,11 @@ export default function DateFilterBar({
     const r = calculateDateRange(preset)
     setLocalSingleDate(r.from)
     if (onDateChange) onDateChange(r.from)
-    if (onRangeChange) onRangeChange(r.from, r.to)
+    else if (onRangeChange) onRangeChange(r.from, r.to)
   }
 
   // Range navigation (shifts range by its span in days, minimum 1 day)
   const handleShiftRange = (direction: -1 | 1) => {
-    if (!onRangeChange) return
     const f = parseDate(localFrom || todayStr)
     const tDate = parseDate(localTo || localFrom || todayStr)
     if (!f || !tDate) return
@@ -338,8 +341,8 @@ export default function DateFilterBar({
     const newTo = shiftDate(isoDate(tDate), direction * spanDays)
     setLocalFrom(newFrom)
     setLocalTo(newTo)
-    onRangeChange(newFrom, newTo)
-    if (onDateChange) onDateChange(newFrom)
+    if (onRangeChange) onRangeChange(newFrom, newTo)
+    else if (onDateChange) onDateChange(newFrom)
   }
 
   const handleRangePreset = (preset: PresetKey) => {
@@ -347,20 +350,20 @@ export default function DateFilterBar({
     setLocalFrom(r.from)
     setLocalTo(r.to)
     if (onRangeChange) onRangeChange(r.from, r.to)
-    if (onDateChange) onDateChange(r.from)
+    else if (onDateChange) onDateChange(r.from)
   }
 
   const handleApplyRange = () => {
     if (localFrom && localTo && localFrom <= localTo) {
       if (onRangeChange) onRangeChange(localFrom, localTo)
-      if (onDateChange) onDateChange(localFrom)
+      else if (onDateChange) onDateChange(localFrom)
     }
   }
 
   const handleApplySingle = () => {
     if (localSingleDate) {
       if (onDateChange) onDateChange(localSingleDate)
-      if (onRangeChange) onRangeChange(localSingleDate, shiftDate(localSingleDate, 1))
+      else if (onRangeChange) onRangeChange(localSingleDate, shiftDate(localSingleDate, 1))
     }
   }
 
@@ -368,13 +371,13 @@ export default function DateFilterBar({
     if (activeMode === "single") {
       setLocalSingleDate(todayStr)
       if (onDateChange) onDateChange(todayStr)
-      if (onRangeChange) onRangeChange(todayStr, shiftDate(todayStr, 1))
+      else if (onRangeChange) onRangeChange(todayStr, shiftDate(todayStr, 1))
     } else {
       setLocalFrom(todayStr)
       const nextD = shiftDate(todayStr, 1)
       setLocalTo(nextD)
       if (onRangeChange) onRangeChange(todayStr, nextD)
-      if (onDateChange) onDateChange(todayStr)
+      else if (onDateChange) onDateChange(todayStr)
     }
   }
 
@@ -415,12 +418,15 @@ export default function DateFilterBar({
               type="button"
               onClick={() => {
                 setActiveMode("range")
+                onModeChange?.("range")
                 const curFrom = localFrom || fromDate || date || todayStr
                 const curTo = localTo && localTo >= curFrom ? localTo : shiftDate(curFrom, 1)
                 setLocalFrom(curFrom)
                 setLocalTo(curTo)
                 if (onRangeChange) {
                   onRangeChange(curFrom, curTo)
+                } else if (onDateChange) {
+                  onDateChange(curFrom)
                 }
               }}
               className="rounded-md px-2 py-0.5 text-xs transition-colors cursor-pointer text-zinc-600 hover:text-zinc-900"
@@ -485,7 +491,7 @@ export default function DateFilterBar({
                 setLocalSingleDate(d)
                 if (d) {
                   if (onDateChange) onDateChange(d)
-                  if (onRangeChange) onRangeChange(d, shiftDate(d, 1))
+                  else if (onRangeChange) onRangeChange(d, shiftDate(d, 1))
                 }
               }}
             />
@@ -555,9 +561,11 @@ export default function DateFilterBar({
             type="button"
             onClick={() => {
               setActiveMode("single")
+              onModeChange?.("single")
               const d = localSingleDate || localFrom || fromDate || date || todayStr
               setLocalSingleDate(d)
               if (onDateChange) onDateChange(d)
+              else if (onRangeChange) onRangeChange(d, shiftDate(d, 1))
             }}
             className="rounded-md px-2 py-0.5 text-xs transition-colors cursor-pointer text-zinc-600 hover:text-zinc-900"
           >
@@ -655,7 +663,7 @@ export default function DateFilterBar({
               setLocalFrom(newFrom)
               if (newFrom && localTo && newFrom <= localTo) {
                 if (onRangeChange) onRangeChange(newFrom, localTo)
-                if (onDateChange) onDateChange(newFrom)
+                else if (onDateChange) onDateChange(newFrom)
               }
             }}
           />
@@ -685,7 +693,7 @@ export default function DateFilterBar({
               setLocalTo(newTo)
               if (newTo && localFrom && localFrom <= newTo) {
                 if (onRangeChange) onRangeChange(localFrom, newTo)
-                if (onDateChange) onDateChange(localFrom)
+                else if (onDateChange) onDateChange(localFrom)
               }
             }}
           />

@@ -3616,9 +3616,9 @@ def _stay_balance(reservation: str) -> dict:
 @frappe.whitelist()
 @require_roles("Front Desk", "Night Auditor", "Kamra Agent", "Finance", "Revenue Manager")
 def front_desk_snapshot(property: str | None = None, date: str | None = None,
-                        to_date: str | None = None):
+                        to_date: str | None = None, from_date: str | None = None):
 	"""Everything the front desk needs for one day or a date range, in one call."""
-	date = date or nowdate()
+	date = from_date or date or nowdate()
 	end_date = to_date or date
 	today = nowdate()
 
@@ -3675,10 +3675,10 @@ def front_desk_snapshot(property: str | None = None, date: str | None = None,
 				"status NOT IN ('Cancelled', 'No Show')",
 			]
 		else:
-			# Stay overlap logic: check_in < to_date AND check_out > from_date
+			# Stay overlap logic: guest stayed during [date, end_date]
 			inh_conds = [
-				"check_in_date < %(end_date)s",
-				"check_out_date > %(date)s",
+				"check_in_date <= %(end_date)s",
+				"check_out_date >= %(date)s",
 				"status NOT IN ('Cancelled', 'No Show')",
 			]
 		inh_params = {"date": date, "end_date": end_date}

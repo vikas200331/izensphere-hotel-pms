@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   BedDouble,
   LogIn,
@@ -9,7 +9,7 @@ import {
   PieChart,
   SlidersHorizontal,
 } from "lucide-react"
-import { Link, useNavigate, useLocation, useOutletContext } from "react-router-dom"
+import { Link, useNavigate, useLocation, useOutletContext, useSearchParams } from "react-router-dom"
 import {
   call,
   getCurrentProperty,
@@ -478,7 +478,18 @@ export default function Today() {
   const { t, lang } = useT()
   const { refreshKey } = useOutletContext<ShellContext>()
   const navigate = useNavigate()
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [searchParams, setSearchParams] = useSearchParams()
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const paramDate = searchParams.get("date") || ""
+  const paramFrom = searchParams.get("from_date") || searchParams.get("from") || ""
+  const paramTo = searchParams.get("to_date") || searchParams.get("to") || ""
+
+  const initialMode = paramFrom && paramTo ? "range" : "single"
+  const [filterMode, setFilterMode] = useState<"single" | "range">(initialMode)
+  const [date, setDate] = useState<string>(paramDate || paramTo || todayStr)
+  const [fromDate, setFromDate] = useState<string>(paramFrom || paramDate || todayStr)
+  const [toDate, setToDate] = useState<string>(paramTo || paramDate || todayStr)
+
   const [snap, setSnap] = useState<Snapshot | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [kpi, setKpi] = useState<any>(null)
@@ -508,15 +519,58 @@ export default function Today() {
       })
   }, [])
 
+  const handleDateChange = useCallback((newDate: string) => {
+    setDate(newDate)
+    setFilterMode("single")
+    setSearchParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("date", newDate)
+        next.delete("from_date")
+        next.delete("to_date")
+        next.delete("from")
+        next.delete("to")
+        return next
+      },
+      { replace: true },
+    )
+  }, [setSearchParams])
+
+  const handleRangeChange = useCallback((from: string, to: string) => {
+    setFromDate(from)
+    setToDate(to)
+    setDate(from)
+    setFilterMode("range")
+    setSearchParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set("from_date", from)
+        next.set("to_date", to)
+        next.delete("date")
+        return next
+      },
+      { replace: true },
+    )
+  }, [setSearchParams])
+
   const refresh = useCallback(async () => {
     try {
-      const today = new Date().toISOString().slice(0, 10)
-      const isHistoricalOrFuture = date && date !== today
+      const prop = getCurrentProperty()
+      if (!prop) return
+
+      const isRange = filterMode === "range" && Boolean(fromDate && toDate)
+      const isHistoricalOrFuture = date && date !== todayStr
+
       const [s, k] = await Promise.all([
-        getSnapshot(isHistoricalOrFuture ? date : undefined),
+        getSnapshot(
+          isRange ? fromDate : (isHistoricalOrFuture ? date : undefined),
+          isRange ? toDate : undefined,
+        ),
         call("izensphere_stay_and_dine.dashboards.property_dashboard", {
-          property: getCurrentProperty(),
-          date: isHistoricalOrFuture ? date : undefined,
+          property: prop,
+          date: isRange ? toDate : (isHistoricalOrFuture ? date : undefined),
+          from_date: isRange ? fromDate : undefined,
+          to_date: isRange ? toDate : undefined,
         }).catch(() => null),
       ])
       setSnap(s)
@@ -525,7 +579,7 @@ export default function Today() {
     } catch (e) {
       setError(serverError(e))
     }
-  }, [date])
+  }, [date, filterMode, fromDate, toDate, todayStr])
 
   useEffect(() => {
     refresh()
@@ -570,7 +624,14 @@ export default function Today() {
     ? Number(occNow.occupied)
     : snap?.rooms.filter((r) => r.occupancy_status === "Occupied").length
   const sellableN = occNow ? Number(occNow.sellable) : (snap?.rooms.length ?? 0)
-  const occupancyPct = sellableN ? Math.round(((occupied ?? 0) / sellableN) * 100) : 0
+  const isRange = filterMode === "range" && Boolean(fromDate && toDate)
+  const occupancyPctFormatted =
+    isRange && kpi?.occupancy_pct != null
+      ? Number(kpi.occupancy_pct).toFixed(1).replace(/\.0$/, "")
+      : sellableN
+        ? Math.round(((occupied ?? 0) / sellableN) * 100).toString()
+        : "0"
+  const occupancyPct = Number(occupancyPctFormatted)
   const arrivalsN = snap?.arrivals.length ?? 0
   const departuresN = snap?.departures.length ?? 0
   const inhouseN = snap?.in_house.length ?? 0
@@ -746,12 +807,37 @@ export default function Today() {
   // the old Front Desk dashboard's money row, folded into Today
   const outstanding = Number(kpi?.finance?.outstanding ?? 0)
   const moneyTiles: { label: string; value: string; to: string; tone?: string }[] = [
-    { label: t("Collected today"), value: `${cur()}${inr0(Number(kpi?.collections_today ?? 0))}`, to: "/cashier/board" },
-    { label: t("Outstanding"), value: `${cur()}${inr0(outstanding)}`, to: "/ledgers", tone: outstanding ? "text-amber-700" : undefined },
-    { label: t("Open folios"), value: String(kpi?.finance?.open_folios ?? 0), to: "/billing" },
-    { label: t("ADR, month to date"), value: `${cur()}${inr0(Number(kpi?.statistics?.adr ?? 0))}`, to: "/dashboard" },
-    { label: t("RevPAR, month to date"), value: `${cur()}${inr0(Number(kpi?.statistics?.revpar ?? 0))}`, to: "/dashboard" },
-    { label: t("Occupancy, month to date"), value: `${kpi?.statistics?.mtd_occupancy_pct ?? 0}%`, to: "/reports/flash" },
+    {
+      label: isRange ? t("Collected in period") : t("Collected today"),
+      value: `${cur()}${inr0(Number(kpi?.collections_today ?? 0))}`,
+      to: "/cashier/board",
+    },
+    {
+      label: t("Outstanding"),
+      value: `${cur()}${inr0(outstanding)}`,
+      to: "/ledgers",
+      tone: outstanding ? "text-amber-700" : undefined,
+    },
+    {
+      label: t("Open folios"),
+      value: String(kpi?.finance?.open_folios ?? 0),
+      to: "/billing",
+    },
+    {
+      label: isRange ? t("ADR in period") : t("ADR, month to date"),
+      value: `${cur()}${inr0(Number((isRange ? kpi?.adr : kpi?.statistics?.adr) ?? 0))}`,
+      to: isRange ? `/dashboard?from_date=${fromDate}&to_date=${toDate}` : "/dashboard",
+    },
+    {
+      label: isRange ? t("RevPAR in period") : t("RevPAR, month to date"),
+      value: `${cur()}${inr0(Number((isRange ? kpi?.revpar : kpi?.statistics?.revpar) ?? 0))}`,
+      to: isRange ? `/dashboard?from_date=${fromDate}&to_date=${toDate}` : "/dashboard",
+    },
+    {
+      label: isRange ? t("Occupancy in period") : t("Occupancy, month to date"),
+      value: `${isRange ? (kpi?.occupancy_pct ?? 0) : (kpi?.statistics?.mtd_occupancy_pct ?? 0)}%`,
+      to: "/reports/flash",
+    },
   ]
   const hkRoom = kpi?.housekeeping?.room_status ?? {}
   const hkStats = [
@@ -779,7 +865,7 @@ export default function Today() {
           label={t("Arrivals")}
           value={arrivalsN}
           spark={mkTrend(arrivalsN)}
-          to="/in-house?tab=arrivals"
+          to={isRange ? `/in-house?tab=arrivals&date=${fromDate}&until=${toDate}` : "/in-house?tab=arrivals"}
         />
         <StatCard
           icon={<LogOut className="size-4" />}
@@ -787,14 +873,14 @@ export default function Today() {
           value={departuresN}
           spark={mkTrend(departuresN, false)}
           sparkColor="var(--color-amber-600)"
-          to="/in-house?tab=departures"
+          to={isRange ? `/in-house?tab=departures&date=${fromDate}&until=${toDate}` : "/in-house?tab=departures"}
         />
         <StatCard
           icon={<Users className="size-4" />}
           label={t("In-house")}
           value={inhouseN}
           spark={mkTrend(inhouseN)}
-          to="/in-house?tab=in-house"
+          to={isRange ? `/in-house?tab=in-house&date=${fromDate}&until=${toDate}` : "/in-house?tab=in-house"}
         />
         <StatCard
           icon={<PieChart className="size-4" />}
@@ -802,10 +888,14 @@ export default function Today() {
           to="/room-board"
           value={`${occupancyPct}%`}
           progress={occupancyPct}
-          progressLabel={t("{occupied} of {total} rooms", {
-            occupied: occupied ?? 0,
-            total: sellableN,
-          })}
+          progressLabel={
+            isRange
+              ? t("{pct}% over period", { pct: occupancyPct })
+              : t("{occupied} of {total} rooms", {
+                  occupied: occupied ?? 0,
+                  total: sellableN,
+                })
+          }
         />
         {figures && <StatCard
           icon={<Wallet className="size-4" />}
@@ -818,12 +908,16 @@ export default function Today() {
                   room: `${cur()}${inr0(roomRevenueToday)}`,
                   // keep "room ₹18,480" together if the line has to wrap
                 }).replace(/ (\S+)$/, "\u00a0$1")
-              : t("RevPAR {amount} · no room charges posted today", {
-                  amount: `${cur()}${inr0(revpar)}`,
-                }))
+              : (isRange
+                  ? t("RevPAR {amount} · no room charges in period", {
+                      amount: `${cur()}${inr0(revpar)}`,
+                    })
+                  : t("RevPAR {amount} · no room charges posted today", {
+                      amount: `${cur()}${inr0(revpar)}`,
+                    })))
           }
           spark={mkTrend(revenue)}
-          to="/dashboard"
+          to={isRange ? `/dashboard?from_date=${fromDate}&to_date=${toDate}` : "/dashboard"}
         />}
         <StatCard
           icon={<ListChecks className="size-4" />}
@@ -1022,16 +1116,24 @@ export default function Today() {
             {t("Front Desk Overview")}
           </h1>
           <p className="mt-0.5 text-sm text-zinc-500">
-            {greeting}. {t("Here's what's happening today.")}
+            {isRange
+              ? `${greeting}. ${t("Overview for {from} to {to}.", { from: fromDate, to: toDate })}`
+              : date !== todayStr
+                ? `${greeting}. ${t("Overview for {date}.", { date })}`
+                : `${greeting}. ${t("Here's what's happening today.")}`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DateFilterBar
-            mode="single"
+            mode={filterMode}
             allowModeToggle
+            onModeChange={setFilterMode}
             date={date}
-            onDateChange={setDate}
-            label="Date"
+            onDateChange={handleDateChange}
+            fromDate={fromDate}
+            toDate={toDate}
+            onRangeChange={handleRangeChange}
+            label={t("Date")}
           />
           <Button
             variant="outline"

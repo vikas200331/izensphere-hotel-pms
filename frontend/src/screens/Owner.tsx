@@ -3,8 +3,8 @@
     figures are the manager flash's; the server decides who sees them. */
 
 import { useCallback, useEffect, useState, type ReactNode } from "react"
-import { Link, useOutletContext } from "react-router-dom"
-import { ChevronRight, FileText } from "lucide-react"
+import { Link, useOutletContext, useSearchParams } from "react-router-dom"
+import { Calendar, ChevronRight, FileText } from "lucide-react"
 import { call, getCurrentProperty, myProperties, setCurrentProperty, type PropertyRow } from "../lib/api"
 import { serverError } from "../lib/resource"
 import { cur, moneyLocale, useLocale } from "../lib/money"
@@ -12,6 +12,7 @@ import { getLang } from "../lib/dir"
 import { useRealtime } from "../lib/realtime"
 import { useAuth } from "../lib/auth"
 import { visibleApps } from "../lib/apps"
+import { isoDate } from "../lib/stay"
 import type { ShellContext } from "../AppShell"
 import { useT } from "../lib/i18n"
 import { cn } from "../lib/utils"
@@ -30,6 +31,7 @@ interface Day {
 interface Snapshot {
   property_name: string
   date: string
+  from_date?: string
   total_rooms: number
   today: Day
   movement: { arrivals: number; departures: number; in_house: number; no_shows: number }
@@ -51,7 +53,46 @@ interface PortfolioRow {
   outstanding: number
 }
 
-type Period = "today" | "yesterday" | "month"
+type Period = "today" | "yesterday" | "month" | "custom"
+type PresetKey = "last_7" | "this_week" | "last_week" | "this_month" | "last_month"
+
+function getPresetRange(preset: PresetKey, baseDateStr?: string): { from: string; to: string } {
+  const base = baseDateStr ? new Date(baseDateStr + "T00:00:00") : new Date()
+  const y = base.getFullYear()
+  const m = base.getMonth()
+  const d = base.getDate()
+
+  switch (preset) {
+    case "last_7": {
+      const from = new Date(y, m, d - 6)
+      return { from: isoDate(from), to: isoDate(base) }
+    }
+    case "this_week": {
+      const dayOfWeek = base.getDay() // 0 is Sunday
+      const diff = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek
+      const monday = new Date(y, m, d + diff)
+      return { from: isoDate(monday), to: isoDate(base) }
+    }
+    case "last_week": {
+      const dayOfWeek = base.getDay()
+      const diff = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek - 7
+      const lastMonday = new Date(y, m, d + diff)
+      const lastSunday = new Date(y, m, d + diff + 6)
+      return { from: isoDate(lastMonday), to: isoDate(lastSunday) }
+    }
+    case "this_month": {
+      const firstDay = new Date(y, m, 1)
+      return { from: isoDate(firstDay), to: isoDate(base) }
+    }
+    case "last_month": {
+      const firstDayLastMonth = new Date(y, m - 1, 1)
+      const lastDayLastMonth = new Date(y, m, 0)
+      return { from: isoDate(firstDayLastMonth), to: isoDate(lastDayLastMonth) }
+    }
+    default:
+      return { from: isoDate(base), to: isoDate(base) }
+  }
+}
 
 const money = (n: unknown) =>
   cur() + Number(n ?? 0).toLocaleString(moneyLocale(), { maximumFractionDigits: 0 })
@@ -59,7 +100,7 @@ const money = (n: unknown) =>
 const day = (d: string, opts: Intl.DateTimeFormatOptions) =>
   new Date(d + "T00:00:00").toLocaleDateString(getLang(), opts)
 
-function Section({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+function Section({ title, children, className }: { title: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn("rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm", className)}>
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">{title}</h2>
@@ -106,7 +147,20 @@ export default function Owner() {
   // izensphere_stay_and_dine.dashboards.portfolio_dashboard's roles: a night auditor gets one hotel at a time
   const chainWide = ["Finance", "Revenue Manager", "Hotel Admin", "System Manager", "Administrator"]
     .some((r) => roles.includes(r))
-  const [period, setPeriod] = useState<Period>("today")
+
+  const [searchParams, setSearchParams] = useSearchParams()
+  const paramPeriod = (searchParams.get("period") as Period) || ""
+  const paramFrom = searchParams.get("from_date") || searchParams.get("from") || ""
+  const paramTo = searchParams.get("to_date") || searchParams.get("to") || searchParams.get("date") || ""
+
+  const [period, setPeriod] = useState<Period>(() => {
+    if (paramFrom && paramTo) return "custom"
+    if (paramPeriod && ["today", "yesterday", "month", "custom"].includes(paramPeriod)) return paramPeriod
+    return "today"
+  })
+  const [fromDate, setFromDate] = useState<string>(() => paramFrom || "")
+  const [toDate, setToDate] = useState<string>(() => paramTo || "")
+
   const [scope, setScope] = useState<"property" | "all">("property")
   const [props, setProps] = useState<PropertyRow[]>([])
   const [snap, setSnap] = useState<Snapshot | null>(null)
@@ -125,18 +179,103 @@ export default function Owner() {
         .catch((e) => setError(serverError(e)))
       return
     }
+
+    const prop = getCurrentProperty()
+    if (!prop) return
+
+    if (period === "custom") {
+      if (!fromDate || !toDate) return
+      if (fromDate > toDate) {
+        setError(t("From date cannot be after To date"))
+        return
+      }
+      call<Snapshot>("izensphere_stay_and_dine.dashboards.owner_snapshot", {
+        property: prop,
+        from_date: fromDate,
+        date: toDate,
+        to_date: toDate,
+        period: "custom",
+      })
+        .then((s) => {
+          setSnap(s)
+          if (!fromDate && s.from_date) setFromDate(s.from_date)
+          if (!toDate && s.date) setToDate(s.date)
+        })
+        .catch((e) => setError(serverError(e)))
+      return
+    }
+
     // the server counts the period from the property's business date, never the phone's clock
-    call<Snapshot>("izensphere_stay_and_dine.dashboards.owner_snapshot", { property: getCurrentProperty(), period })
-      .then(setSnap)
+    call<Snapshot>("izensphere_stay_and_dine.dashboards.owner_snapshot", { property: prop, period })
+      .then((s) => {
+        setSnap(s)
+        if (!fromDate && s.from_date) setFromDate(s.from_date)
+        if (!toDate && s.date) setToDate(s.date)
+      })
       .catch((e) => setError(serverError(e)))
-  }, [period, scope])
+  }, [period, scope, fromDate, toDate, t])
   useEffect(load, [load])
   useRealtime(load)
+
+  const handlePeriodChange = (p: Period) => {
+    setPeriod(p)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (p === "custom") {
+          const f = fromDate || snap?.from_date || snap?.date || ""
+          const to = toDate || snap?.date || ""
+          if (f) {
+            setFromDate(f)
+            next.set("from_date", f)
+          }
+          if (to) {
+            setToDate(to)
+            next.set("to_date", to)
+          }
+          next.set("period", "custom")
+        } else {
+          next.set("period", p)
+          next.delete("from_date")
+          next.delete("to_date")
+        }
+        return next
+      },
+      { replace: true }
+    )
+  }
+
+  const handleRangeChange = (from: string, to: string) => {
+    setFromDate(from)
+    setToDate(to)
+    setPeriod("custom")
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set("period", "custom")
+        if (from) next.set("from_date", from)
+        else next.delete("from_date")
+        if (to) next.set("to_date", to)
+        else next.delete("to_date")
+        return next
+      },
+      { replace: true }
+    )
+  }
 
   const periods: [Period, string][] = [
     ["today", t("Today")],
     ["yesterday", t("Yesterday")],
     ["month", t("Month to date")],
+    ["custom", t("Custom")],
+  ]
+
+  const customPresets: { key: PresetKey; label: string }[] = [
+    { key: "last_7", label: t("Last 7 days") },
+    { key: "this_week", label: t("This week") },
+    { key: "last_week", label: t("Last week") },
+    { key: "this_month", label: t("This month") },
+    { key: "last_month", label: t("Last month") },
   ]
   const d = snap?.today
   const depts = d
@@ -175,22 +314,98 @@ export default function Owner() {
       </div>
 
       {scope === "property" && (
-        <div role="tablist" className="grid grid-cols-3 rounded-xl border border-zinc-200 bg-white p-1 text-sm">
-          {periods.map(([p, label]) => (
-            <button
-              key={p}
-              type="button"
-              role="tab"
-              aria-selected={period === p}
-              onClick={() => setPeriod(p)}
-              className={cn(
-                "min-h-10 rounded-lg px-2 font-medium",
-                period === p ? "bg-brand-600 text-white" : "text-zinc-600",
+        <div className="space-y-2">
+          <div role="tablist" className="grid grid-cols-4 rounded-xl border border-zinc-200 bg-white p-1 text-sm shadow-xs">
+            {periods.map(([p, label]) => (
+              <button
+                key={p}
+                type="button"
+                role="tab"
+                aria-selected={period === p}
+                onClick={() => handlePeriodChange(p)}
+                className={cn(
+                  "min-h-10 rounded-lg px-1 font-medium transition-colors text-center text-xs sm:text-sm cursor-pointer",
+                  period === p ? "bg-brand-600 text-white shadow-xs" : "text-zinc-600 hover:text-zinc-900",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {period === "custom" && (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 font-semibold text-zinc-700">
+                  <Calendar className="size-3.5 text-brand-600" />
+                  <span>{t("Custom Date Range")}</span>
+                </div>
+                {snap?.from_date && snap?.date && (
+                  <span className="font-medium text-zinc-500">
+                    {snap.from_date === snap.date ? snap.date : `${snap.from_date} → ${snap.date}`}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+                    {t("From date")}
+                  </label>
+                  <input
+                    type="date"
+                    aria-label={t("From date")}
+                    value={fromDate}
+                    max={toDate || undefined}
+                    onChange={(e) => handleRangeChange(e.target.value, toDate)}
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-medium text-zinc-900 focus:bg-white focus:border-brand-500 focus:outline-none cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+                    {t("To date")}
+                  </label>
+                  <input
+                    type="date"
+                    aria-label={t("To date")}
+                    value={toDate}
+                    min={fromDate || undefined}
+                    onChange={(e) => handleRangeChange(fromDate, e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-medium text-zinc-900 focus:bg-white focus:border-brand-500 focus:outline-none cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-zinc-100">
+                <span className="text-[11px] text-zinc-400 me-1">{t("Presets")}:</span>
+                {customPresets.map((p) => {
+                  const r = getPresetRange(p.key, snap?.date)
+                  const isActive = fromDate === r.from && toDate === r.to
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => handleRangeChange(r.from, r.to)}
+                      className={cn(
+                        "rounded-lg border px-2 py-0.5 text-xs font-medium transition-colors cursor-pointer",
+                        isActive
+                          ? "border-brand-600 bg-brand-50 text-brand-800 font-semibold"
+                          : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {fromDate && toDate && fromDate > toDate && (
+                <p className="text-xs text-rose-600 font-medium">
+                  {t("The end date is before the start date.")}
+                </p>
               )}
-            >
-              {label}
-            </button>
-          ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -217,13 +432,28 @@ export default function Owner() {
 
       {scope === "property" && snap && d && (
         <>
-          <Section title={t("Revenue")}>
+          <Section
+            title={
+              <span className="inline-flex items-center gap-1">
+                <span>{t("Revenue")}</span>
+                {snap && (
+                  <span className="ms-1 font-normal lowercase tracking-normal text-zinc-400 font-sans">
+                    ({snap.from_date && snap.from_date !== snap.date ? `${snap.from_date} → ${snap.date}` : snap.date})
+                  </span>
+                )}
+              </span>
+            }
+          >
             <div className="text-3xl font-semibold tabular-nums text-zinc-900">{money(d.total_revenue)}</div>
             <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
               <Figure label={t("Occupancy")} value={`${d.occupancy_pct}%`} />
               <Figure
                 label={t("Rooms sold")}
-                value={period === "month" ? d.rooms_sold : <span dir="ltr">{d.rooms_sold} / {snap.total_rooms}</span>}
+                value={
+                  period === "month" || period === "custom" || (snap.from_date && snap.from_date !== snap.date)
+                    ? d.rooms_sold
+                    : <span dir="ltr">{d.rooms_sold} / {snap.total_rooms}</span>
+                }
               />
               <Figure label={t("ADR")} value={money(d.adr)} />
               <Figure label={t("RevPAR")} value={money(d.revpar)} />

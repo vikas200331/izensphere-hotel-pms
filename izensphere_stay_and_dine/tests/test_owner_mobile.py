@@ -18,10 +18,10 @@ from izensphere_stay_and_dine.tests.audit_fixtures import (
 	make_room_type,
 )
 
-DESK = "ut-owner-desk@izensphere_stay_and_dine.local"
-FIN = "ut-owner-fin@izensphere_stay_and_dine.local"
-REV = "ut-owner-rev@izensphere_stay_and_dine.local"
-SCOPED = "ut-owner-scoped@izensphere_stay_and_dine.local"
+DESK = "ut-owner-desk@izensphere-stay.test"
+FIN = "ut-owner-fin@izensphere-stay.test"
+REV = "ut-owner-rev@izensphere-stay.test"
+SCOPED = "ut-owner-scoped@izensphere-stay.test"
 
 
 class OwnerSnapshotTestCase(AuditTestCase):
@@ -58,6 +58,15 @@ class OwnerSnapshotTestCase(AuditTestCase):
 		out = dashboards.owner_snapshot(PROP_A, TODAY, start)
 		self.assertEqual(out["from_date"], start)
 		self.assertEqual(out["today"]["rooms_sold"], out["mtd"]["rooms_sold"])
+
+	def test_custom_date_range_and_to_date_alias(self):
+		self.as_user(FIN)
+		start = frappe.utils.add_days(TODAY, -5)
+		end = TODAY
+		out = dashboards.owner_snapshot(PROP_A, from_date=start, to_date=end, period="custom")
+		self.assertEqual(out["from_date"], start)
+		self.assertEqual(str(out["date"]), end)
+		self.assertIn("today", out)
 
 	def test_period_counts_from_the_business_date(self):
 		# the phone sends only the period; the hotel's business date decides

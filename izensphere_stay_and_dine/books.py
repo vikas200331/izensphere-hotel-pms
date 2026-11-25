@@ -253,8 +253,6 @@ def _dates(from_date, to_date):
 	start, end = getdate(from_date), getdate(to_date)
 	if end < start:
 		frappe.throw(_("The end date is before the start date."))
-	if date_diff(end, start) > 366:
-		frappe.throw(_("Pick a period of a year or less."))
 	return start, end
 
 

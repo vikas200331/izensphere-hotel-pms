@@ -145,7 +145,7 @@ def movement_counts(property: str, start: str, date: str) -> dict:
 			"status": ("in", statuses)})
 
 	return {
-		"arrivals": count("check_in_date", ["Confirmed", "Checked In"]),
+		"arrivals": count("check_in_date", ["Confirmed", "Checked In", "Checked Out"]),
 		"departures": count("check_out_date", ["Checked In", "Checked Out"]),
 		"in_house": frappe.db.count("Reservation", {
 			"property": property, "status": "Checked In"}),

@@ -23,10 +23,9 @@ class ReportRangeTestCase(AuditTestCase):
 	def test_range_guard(self):
 		self.assertEqual(report_range_end("2026-10-01"), "2026-10-01")
 		self.assertEqual(report_range_end("2026-10-01", "2026-10-05"), "2026-10-05")
+		self.assertEqual(report_range_end("2026-01-01", "2026-06-01"), "2026-06-01")
 		with self.assertRaises(frappe.ValidationError):
 			report_range_end("2026-10-05", "2026-10-01")
-		with self.assertRaises(frappe.ValidationError):
-			report_range_end("2026-01-01", "2026-06-01")
 
 	def test_flash_over_a_range_is_the_sum_of_its_days(self):
 		end, start = nowdate(), add_days(nowdate(), -2)
