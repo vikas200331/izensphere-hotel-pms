@@ -83,15 +83,6 @@ interface Detail {
   /** may this user set the billed group rate (Revenue Manager / Hotel Admin) */
   can_set_rate: boolean
   rooming_list: Guest[]
-  event: {
-    name: string
-    venue: string
-    event_type: string
-    event_date: string
-    status: string
-    attendees: number
-    quoted_amount: number
-  } | null
   master_folio: string | null
   master_folio_status: string | null
   master_folio_balance: number
@@ -870,16 +861,6 @@ export default function GroupControl({
             )}
           </div>
 
-          {d.event && (
-            <div className="rounded-lg bg-zinc-50 px-4 py-2.5 text-sm">
-              <span className="font-medium">{translate(d.event.event_type)}</span>
-              <span className="text-zinc-500">
-                {" "}{translate("at ")}{short(d.event.venue)} · {d.event.event_date} · {d.event.attendees}{translate(" pax")}
-                {d.event.quoted_amount ? ` · ${inr(d.event.quoted_amount)}` : ""}{" "}
-              </span>
-              <Badge tone={d.event.status === "Confirmed" ? "green" : "amber"}>{translate(d.event.status)}</Badge>
-            </div>
-          )}
         </div>
       )}
 

@@ -68,8 +68,6 @@ scheduler_events = {
 		# are kept a week for reprints, then dropped
 		"50 3 * * *": ["izensphere_stay_and_dine.printing.purge_old_jobs"],
 		# 04:45 - drop old kamrapms.com Hosting Enquiry leads (default 24 months;
-		# Won / converted stays; site_config hosting_enquiry_retention_months)
-		"45 4 * * *": ["izensphere_stay_and_dine.hosting_enquiry_retention.purge_expired_hosting_enquiries"],
 		# 06:00 and 18:00 - warm the GitHub latest-release cache for the update nag
 		"0 6,18 * * *": ["izensphere_stay_and_dine.health.poll_github_releases"],
 		# every minute - outbound webhook retries that are due (backoff)
@@ -117,6 +115,10 @@ website_route_rules = [
 
 # Clean, shareable guest URLs redirect into the SPA's routes.
 website_redirects = [
+	{"source": r"/stay-and-dine$", "target": "/izensphere-stay-and-dine"},
+	{"source": r"/stay-and-dine/(.*)", "target": r"/izensphere-stay-and-dine/\1"},
+	{"source": r"/kamra$", "target": "/izensphere-stay-and-dine"},
+	{"source": r"/kamra/(.*)", "target": r"/izensphere-stay-and-dine/\1"},
 	{"source": r"/book$", "target": "/izensphere-stay-and-dine/book"},
 	{"source": r"/book/(.*)", "target": r"/izensphere-stay-and-dine/book/\1"},
 	{"source": r"/stay$", "target": "/izensphere-stay-and-dine/stay"},

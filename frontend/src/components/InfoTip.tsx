@@ -11,7 +11,7 @@ const DOCS = "https://kamrapms.com/docs"
 const TRANSLATED = new Set([
   "why-kamra", "how-it-works", "features", "user-guide", "faq", "settings",
   "reports", "rooms", "front-desk", "reservations", "operations", "billing",
-  "night-audit", "revenue", "housekeeping", "fnb", "banquets", "booking-engine",
+  "night-audit", "revenue", "housekeeping", "fnb", "booking-engine",
 ])
 
 /** A docs link in the reader's language when that page is translated.

@@ -127,12 +127,6 @@
    "read_only": 1
   },
   {
-   "fieldname": "event",
-   "fieldtype": "Link",
-   "label": "Event (Venue Booking)",
-   "options": "Venue Booking"
-  },
-  {
    "fieldname": "sb_blocks",
    "fieldtype": "Section Break",
    "label": "Room Block"

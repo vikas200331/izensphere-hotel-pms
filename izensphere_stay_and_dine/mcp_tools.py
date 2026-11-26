@@ -24,7 +24,6 @@ GROUP_MODULE: dict[str, str | None] = {
 	"Onboarding": "admin",
 	"Night audit": "finance",
 	"Groups": "front-desk",
-	"Banquets": "events",
 	"Housekeeping": "housekeeping",
 	"F&B": "fnb",
 	"Laundry": "fnb",
